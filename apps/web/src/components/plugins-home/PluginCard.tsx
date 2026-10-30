@@ -1,3 +1,4 @@
+import { SHOW_UPSTREAM_LINKS } from '../../product';
 // Single plugin card rendered inside the plugins-home grid.
 //
 // Each card is a hero preview tile + a small metadata footer. The
@@ -369,7 +370,7 @@ export function PluginCard({
               </button>
             ) : null}
           </div>
-          {onShareAction ? (
+          {SHOW_UPSTREAM_LINKS && onShareAction ? (
             <div
               className="plugins-home__share-actions"
               aria-label={t('pluginCard.shareAria', { title })}

@@ -1,3 +1,4 @@
+import { SHOW_UPSTREAM_LINKS } from '../product';
 // OD Library tab — the global asset registry grid.
 //
 // Shows every asset that has entered the system (clipper capture, manual
@@ -1139,7 +1140,7 @@ export function LibrarySection({ active, onOpenProject }: Props) {
       {fontFaceCss ? <style>{fontFaceCss}</style> : null}
       <header className="entry-section__head">
         <h1 className="entry-section__title">{t('library.title')}</h1>
-        <div className={styles.clipperHint}>
+        {SHOW_UPSTREAM_LINKS ? <div className={styles.clipperHint}>
           <p className={styles.headerHint}>{t('library.headerHint')}</p>
           <a
             className={styles.clipperDownload}
@@ -1150,7 +1151,7 @@ export function LibrarySection({ active, onOpenProject }: Props) {
             <Icon name="download" size={15} />
             {t('library.getClipper')}
           </a>
-        </div>
+        </div> : null}
       </header>
 
       <div className={styles.toolbar}>

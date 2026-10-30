@@ -10,6 +10,16 @@ function email(value: string, index = 0) { fireEvent.change(screen.getAllByRole(
 function response(results: unknown[]) { return new Response(JSON.stringify({ results }), { status: 200 }); }
 
 describe('member-line invitation states', () => {
+  it('mounts a closed invitation dialog on HTTP origins without native randomUUID', () => {
+    vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
+    const view = render(<InviteDialog open={false} workspaceContext={owner} onClose={() => {}} />);
+    expect(view.container).toBeEmptyDOMElement();
+    view.rerender(<InviteDialog open workspaceContext={owner} onClose={() => {}} />);
+    email('new@example.com');
+    fireEvent.click(screen.getByRole('button', { name: /添加成员|add member/i }));
+    expect(screen.getAllByRole('textbox')).toHaveLength(2);
+  });
+
   it('initially focuses the ordinary dialog title without marking the email input focused', () => {
     render(<InviteDialog open workspaceContext={owner} onClose={() => {}} />);
     expect(document.activeElement).toBe(screen.getByRole('heading'));

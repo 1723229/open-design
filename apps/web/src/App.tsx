@@ -1,3 +1,4 @@
+import { SHOW_OFFICIAL_CLOUD, SHOW_UPSTREAM_LINKS } from './product';
 import { WorkspaceRemovalBoundary } from './components/WorkspaceRemovalBoundary';
 import { homeAutoSendIdentity, type HomeRequestConcurrencyRejection } from './runtime/home-auto-send-identity';
 import { AmrConcurrencyDialog } from './components/AmrConcurrencyDialog';
@@ -1940,7 +1941,7 @@ function AppInner() {
   // every subsequent capture() a no-op. When the user opts back in we
   // call opt_in_capturing to resume.
   useEffect(() => {
-    analytics.setConsent(daemonAppConfigReady && config.telemetry?.metrics === true);
+    analytics.setConsent(SHOW_UPSTREAM_LINKS && daemonAppConfigReady && config.telemetry?.metrics === true);
   }, [analytics.setConsent, daemonAppConfigReady, config.telemetry?.metrics]);
 
   // Sync PostHog's distinct_id with the anonymous installationId, both on
@@ -2259,7 +2260,7 @@ function AppInner() {
   // the modal-backdrop layer in index.css so opening Settings does not hide
   // it.
   const showPrivacyConsent =
-    daemonConfigLoaded &&
+    SHOW_UPSTREAM_LINKS && daemonConfigLoaded &&
     config.privacyDecisionAt == null &&
     config.onboardingCompleted === true &&
     !registrationInviteActive;
@@ -6270,7 +6271,7 @@ function AppInner() {
           (`opend.home.*`), so the home view is where they belong: not over a
           project workbench, not over another entry tab, and — since account
           restoration can finish while login is still up — not over onboarding. */}
-      {route.kind === 'home' && route.view === 'home' && (
+      {SHOW_OFFICIAL_CLOUD && route.kind === 'home' && route.view === 'home' && (
         <>
           <TestCampaignModal
             authenticated={isAmrSessionAuthenticated(amrLoginStatus)}

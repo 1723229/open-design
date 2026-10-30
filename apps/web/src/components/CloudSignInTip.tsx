@@ -1,3 +1,4 @@
+import { SHOW_OFFICIAL_CLOUD } from '../product';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { VisuallyHidden } from '@open-design/components';
@@ -130,6 +131,8 @@ export function CloudSignInTip({ sharePrompt = false, className, onLoginSuccess,
     const timer = window.setTimeout(() => setActivationHintDue(true), ACTIVATION_HINT_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [signing]);
+
+  if (!SHOW_OFFICIAL_CLOUD) return null;
 
   // The pitch and the call-to-action slot stay put across states, so the
   // card neither jumps in height nor shows a second "Sign in" while one is

@@ -9,6 +9,7 @@ import { workspaceProjectHeaders } from '../collab/workspace-identity';
 import { useAnalytics } from '../analytics/provider';
 import { trackWorkspaceInviteClick, trackWorkspaceInviteResult, trackWorkspaceSurfaceView, trackWorkspaceInvitePageView } from '../analytics/events';
 import { countBucket, stableAnalyticsErrorCode, workspaceAnalyticsDimensions } from '../analytics/workspace';
+import { randomUUID } from '../utils/uuid';
 import styles from './InviteDialog.module.css';
 
 export interface InviteRow { email: string; role: string }
@@ -27,7 +28,7 @@ interface Props {
   canAssignRoles?: boolean;
   entryFrom?: WorkspaceInviteEntry;
 }
-const emptyRow = (): Row => ({ email: '', role: 'member', idempotencyKey: crypto.randomUUID() });
+const emptyRow = (): Row => ({ email: '', role: 'member', idempotencyKey: randomUUID() });
 const validEmail = (value: string) => {
   const input = document.createElement('input');
   input.type = 'email';
@@ -126,7 +127,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
     if (!open) { exposure.current = null; return; }
     const key = `${identity}:${entryFrom}`;
     if (exposure.current?.key === key) return;
-    surfaceId.current = crypto.randomUUID();
+    surfaceId.current = randomUUID();
     exposure.current = { key, id: surfaceId.current };
     if (onboarding) trackWorkspaceInvitePageView(analytics.track, { page_name: 'onboarding', area: 'onboarding_invite_step', step_name: 'invite_teammates', entry_from: 'onboarding', invite_surface_id: surfaceId.current, ...dimensions });
     else trackWorkspaceSurfaceView(analytics.track, { page_name: page === 'onboarding' ? 'home' : page, area: 'workspace_invite_dialog', entry_from: entryFrom, invite_surface_id: surfaceId.current, ...dimensions });
@@ -205,7 +206,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
       if (i !== index) return row;
       const next = { ...row, ...patch, error: undefined };
       const changed = next.email.trim().toLowerCase() !== row.email.trim().toLowerCase() || canonicalRole(next.role) !== canonicalRole(row.role);
-      return { ...next, idempotencyKey: changed ? crypto.randomUUID() : row.idempotencyKey };
+      return { ...next, idempotencyKey: changed ? randomUUID() : row.idempotencyKey };
     }));
     setError(null);
   }
@@ -224,7 +225,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
     const requestId = analytics.newRequestId();
     const startedAt = performance.now();
     let reported = false;
-    const batchId = crypto.randomUUID();
+    const batchId = randomUUID();
     const result = (succeeded: number, failed: number, code?: string, unknown = 0) => {
       reported = true;
       return trackWorkspaceInviteResult(analytics.track, {
@@ -355,7 +356,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
         <footer className={styles.footer}>{!onboarding ? <Button className={styles.cancel} onClick={close} disabled={submitting}>{t('workspaceInvite.cancel')}</Button> : null}
           <Button type="submit" className={styles.submit} disabled={submitting}>{batchSuccess !== null ? batchSuccess === 0 ? t('workspaceInvite.sent') : t('workspaceInvite.batchSent').replace('{count}', String(batchSuccess)) : submitting ? t('workspaceInvite.sending') : t('workspaceInvite.confirm')}</Button></footer>
       </form></>}
-      {onboarding ? <>{!readyToEnter ? <Button className={styles.skip} disabled={submitting} onClick={() => { click('skip_invite'); onFinish?.(sentCount, 'skipped'); }}>{t('workspaceInvite.skip')}</Button> : null}<footer className={styles.onboardingFooter}><label className={styles.languagePicker}><select aria-label={LOCALE_LABEL[locale]} value={locale} onChange={event => setLocale(event.target.value as Locale)}>{LOCALES.map(code => <option key={code} value={code}>{LOCALE_LABEL[code]}</option>)}</select></label><span>{`© ${new Date().getFullYear()} OpenDesign · ${t('settings.onboardingCloudRights')}`}</span></footer></> : null}
+      {onboarding ? <>{!readyToEnter ? <Button className={styles.skip} disabled={submitting} onClick={() => { click('skip_invite'); onFinish?.(sentCount, 'skipped'); }}>{t('workspaceInvite.skip')}</Button> : null}<footer className={styles.onboardingFooter}><label className={styles.languagePicker}><select aria-label={LOCALE_LABEL[locale]} value={locale} onChange={event => setLocale(event.target.value as Locale)}>{LOCALES.map(code => <option key={code} value={code}>{LOCALE_LABEL[code]}</option>)}</select></label><span>{`© ${new Date().getFullYear()} NexusDesign · ${t('settings.onboardingCloudRights')}`}</span></footer></> : null}
     </section>
     {onboarding ? <div className={styles.art} aria-hidden="true"><img src="/onboarding/registration-invite-art.webp" alt="" /></div> : null}
     {owner && openRoleIndex !== null ? createPortal(<div className={`${styles.menu} ${onboarding ? styles.onboardingMenu : styles.dialogMenu}`} ref={menu} style={menuPos} role="listbox" id={`${id}-roles`}

@@ -1,3 +1,4 @@
+import { SHOW_UPSTREAM_LINKS } from '../product';
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -159,7 +160,7 @@ export function WhatsNewPopup({ active }: { active: boolean }) {
 
   // `appVersion == null` means neither the hook nor the document can name a
   // version yet; the dialog waits rather than titling itself with a guess.
-  if (!active || card == null || appVersion == null) return null;
+  if (!SHOW_UPSTREAM_LINKS || !active || card == null || appVersion == null) return null;
 
   const dialog = (
     <Dialog

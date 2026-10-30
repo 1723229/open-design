@@ -196,22 +196,22 @@ const PLUGIN_SHARE_DETAILS: Record<PluginShareAction, {
     eyebrow: 'GitHub repository',
     fallbackTitle: 'Publish Plugin to GitHub',
     fallbackDescription:
-      'Creates a public GitHub repository for this local OpenDesign plugin.',
+      'Creates a public GitHub repository for this local NexusDesign plugin.',
     confirmLabel: 'Start publishing',
     steps: [
-      'Create a new OpenDesign project for the publish workflow.',
+      'Create a new NexusDesign project for the publish workflow.',
       'Copy this plugin into that project as isolated source context.',
       'Run the official publish action plugin against the local daemon.',
     ],
   },
   'contribute-open-design': {
-    eyebrow: 'OpenDesign pull request',
-    fallbackTitle: 'Contribute Plugin to OpenDesign',
+    eyebrow: 'NexusDesign pull request',
+    fallbackTitle: 'Contribute Plugin to NexusDesign',
     fallbackDescription:
-      'Opens a pull request that adds this plugin to the OpenDesign community catalog.',
+      'Opens a pull request that adds this plugin to the NexusDesign community catalog.',
     confirmLabel: 'Start contribution',
     steps: [
-      'Create a new OpenDesign project for the contribution workflow.',
+      'Create a new NexusDesign project for the contribution workflow.',
       'Copy this plugin into that project as isolated source context.',
       'Run the official contribution action plugin against the local daemon.',
     ],
@@ -2065,7 +2065,7 @@ export function ExtensionsMarketplace({
         skill={selectedSkill}
         author={
           scope === 'official'
-            ? 'OpenDesign'
+            ? 'NexusDesign'
             : scope === 'team'
               ? 'Nexu Team'
               : t('chat.you')
@@ -3318,7 +3318,7 @@ function AvailablePluginDetailsModal({
                 </h3>
               </div>
               <p className="plugin-details-modal__section-hint">
-                This official catalog entry is bundled with OpenDesign and is ready to use.
+                This official catalog entry is bundled with NexusDesign and is ready to use.
               </p>
             </section>
           ) : (

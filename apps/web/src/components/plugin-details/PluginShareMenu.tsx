@@ -1,3 +1,4 @@
+import { SHOW_UPSTREAM_LINKS } from '../../product';
 // Plugin-specific detail actions.
 //
 // Surfaces the small set of actions a user wants when they need to install,
@@ -118,7 +119,7 @@ export function PluginShareMenu({ record, variant = 'default' }: Props) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
   const links = derivePluginSourceLinks(record);
-  const publicShareUrl = buildPluginShareUrl(record);
+  const publicShareUrl = SHOW_UPSTREAM_LINKS ? buildPluginShareUrl(record) : null;
 
   useEffect(() => {
     if (!open) return;
@@ -180,7 +181,7 @@ export function PluginShareMenu({ record, variant = 'default' }: Props) {
   // Open-in-tab actions are real anchors so users can right-click,
   // copy the link address, or open in a new tab from browser chrome.
   const openItems: ShareLinkItem[] = [];
-  if (links.sourceUrl) {
+  if (SHOW_UPSTREAM_LINKS && links.sourceUrl) {
     openItems.push({
       key: 'source',
       label:
@@ -191,7 +192,7 @@ export function PluginShareMenu({ record, variant = 'default' }: Props) {
       href: links.sourceUrl,
     });
   }
-  if (links.homepageUrl) {
+  if (SHOW_UPSTREAM_LINKS && links.homepageUrl) {
     openItems.push({
       key: 'homepage',
       label: t('plugins.actions.openHomepage'),

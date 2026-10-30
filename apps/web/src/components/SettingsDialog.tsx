@@ -1,3 +1,4 @@
+import { SHOW_OFFICIAL_CLOUD, SHOW_UPSTREAM_LINKS } from '../product';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, Dispatch, SetStateAction } from 'react';
 import { Button, VisuallyHidden } from '@open-design/components';
@@ -594,6 +595,10 @@ function sanitizeHttpsUrl(url: string | undefined): string | undefined {
   if (!url) return undefined;
   try {
     const parsed = new URL(url);
+    if (!SHOW_UPSTREAM_LINKS && (
+      /(^|\.)open-design\.ai$/i.test(parsed.hostname)
+      || (parsed.hostname === 'github.com' && /^\/nexu-io\/open-design(?:\/|$)/i.test(parsed.pathname))
+    )) return undefined;
     return parsed.protocol === 'https:' ? parsed.toString() : undefined;
   } catch {
     return undefined;
@@ -889,7 +894,7 @@ function cleanAgentVersionLabel(
 }
 
 function displayAgentName(agent: Pick<AgentInfo, 'id' | 'name'>): string {
-  return agent.id === 'amr' ? 'OpenDesign' : agent.name;
+  return agent.id === 'amr' ? 'NexusDesign' : agent.name;
 }
 
 const AGENT_CLI_ENV_FIELDS = [
@@ -4451,7 +4456,7 @@ export function SettingsDialog({
                 <small>{t('settings.mcpServerHint')}</small>
               </span>
             </button>
-            <button
+            {SHOW_UPSTREAM_LINKS ? <button
               type="button"
               className={`settings-nav-item${activeSection === 'privacy' ? ' active' : ''}`}
               onClick={() => setActiveSection('privacy')}
@@ -4461,7 +4466,7 @@ export function SettingsDialog({
                 <strong>{t('settings.privacy')}</strong>
                 <small>{t('settings.privacyHint')}</small>
               </span>
-            </button>
+            </button> : null}
             <button
               type="button"
               className={`settings-nav-item${activeSection === 'about' ? ' active' : ''}`}
@@ -4527,7 +4532,7 @@ export function SettingsDialog({
                 </button>
               </div>
               </div>
-              {cfg.mode === 'daemon' && !amrCardSignedIn ? (
+              {SHOW_OFFICIAL_CLOUD && cfg.mode === 'daemon' && !amrCardSignedIn ? (
                 // Only prompt to sign into OpenDesign Cloud when NOT already
                 // signed in — the AMR/vela session IS the cloud identity (one
                 // session drives both), so a logged-in user has nothing to do
@@ -6108,7 +6113,7 @@ export function SettingsDialog({
                       </div>
                     </div>
                     <div className="settings-about-update-actions">
-                      {aboutUpdateControl.primaryLabelKey ? (
+                      {SHOW_UPSTREAM_LINKS && aboutUpdateControl.primaryLabelKey ? (
                         <button
                           type="button"
                           className={`settings-about-update-button${
@@ -6130,7 +6135,7 @@ export function SettingsDialog({
                             : t(aboutUpdateControl.primaryLabelKey)}
                         </button>
                       ) : null}
-                      {aboutUpdateControl.showReleaseLink ? (
+                      {SHOW_UPSTREAM_LINKS && aboutUpdateControl.showReleaseLink ? (
                         <button
                           type="button"
                           className="settings-about-release-link"

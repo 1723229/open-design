@@ -1,3 +1,4 @@
+import { SHOW_OFFICIAL_CLOUD } from '../product';
 import { useRegistrationInvite } from './useRegistrationInvite';
 // EntryShell — the centered-hero entry layout.
 //
@@ -2271,7 +2272,7 @@ export function EntryShell({
               <HomeView
                 {...homeViewProps}
                 isActive={view === 'home'}
-                inviteSurface={<HomeInviteSurface signedOut={amrLoggedIn === false} identityReady={!workspaceContextState.loading && !workspaceContextState.identityChangePending && !workspaceContextState.failure} accountId={amrLoggedIn === true ? amrAccountId : null} context={railWorkspaceContext} active={view === 'home'} onSignInRequested={() => { setInviteSignInRequest('start'); navigate({ kind: 'home', view: 'onboarding' }); }} openAfterSignIn={inviteSignInRequest === 'waiting'} onSignInInviteConsumed={() => setInviteSignInRequest(null)} />}
+                inviteSurface={SHOW_OFFICIAL_CLOUD ? <HomeInviteSurface signedOut={amrLoggedIn === false} identityReady={!workspaceContextState.loading && !workspaceContextState.identityChangePending && !workspaceContextState.failure} accountId={amrLoggedIn === true ? amrAccountId : null} context={railWorkspaceContext} active={view === 'home'} onSignInRequested={() => { setInviteSignInRequest('start'); navigate({ kind: 'home', view: 'onboarding' }); }} openAfterSignIn={inviteSignInRequest === 'waiting'} onSignInInviteConsumed={() => setInviteSignInRequest(null)} /> : undefined}
                 /* Home is the one composer in the shell and consumes the page
                    handoff. The community view used to dock a second HomeView
                    (`variant="dock"`) with a handoff of its own; that mount
@@ -4004,11 +4005,12 @@ function OnboardingView({
         className="onboarding-view onboarding-view--cloud"
         aria-label={t('settings.welcomeTitle')}
       >
-        <div className="onboarding-cloud__pane">
+        <div className="onboarding-cloud__pane" style={SHOW_OFFICIAL_CLOUD ? undefined : { gridColumn: '1 / -1', alignItems: 'center' }}>
           <div className="onboarding-cloud__center">
+            <img src="/app-icon.svg" alt="" width={56} height={56} style={{ marginBottom: 24 }} />
             <h1 className="onboarding-cloud__title">{t('settings.onboardingCloudTitle')}</h1>
             <p className="onboarding-cloud__body">{t('settings.onboardingCloudBody')}</p>
-            <div className={onboardingWelcomeStyles.signInAction}>
+            {SHOW_OFFICIAL_CLOUD ? <div className={onboardingWelcomeStyles.signInAction}>
               {!amrSignedIn && !amrStatusResolving && !cloudBusy ? (
                 <span className={onboardingWelcomeStyles.creditCorner}>
                   <span
@@ -4060,8 +4062,8 @@ function OnboardingView({
                         : t('settings.onboardingCloudSignIn')}
                 </span>
               </button>
-            </div>
-            {amrLoginError ? (
+            </div> : null}
+            {SHOW_OFFICIAL_CLOUD && amrLoginError ? (
               <span className="onboarding-cloud__error" role="alert">
                 {amrLoginError}
               </span>
@@ -4079,9 +4081,9 @@ function OnboardingView({
                 aria-hidden={cloudBusy ? true : undefined}
               >
                 <div className={onboardingWelcomeStyles.alternatives}>
-                  <div className={onboardingWelcomeStyles.divider}>
+                  {SHOW_OFFICIAL_CLOUD ? <div className={onboardingWelcomeStyles.divider}>
                     {t('settings.onboardingOwnAi')}
-                  </div>
+                  </div> : null}
                   <div className={`onboarding-cloud__alts ${onboardingWelcomeStyles.options}`}>
                     <Button
                       variant="subtle"
@@ -4156,13 +4158,13 @@ function OnboardingView({
           <footer className="onboarding-cloud__footer">
             <LanguageMenu placement="up" align="start" />
             <span>
-              © {new Date().getFullYear()} OpenDesign · {t('settings.onboardingCloudRights')}
+              © {new Date().getFullYear()} NexusDesign · {t('settings.onboardingCloudRights')}
             </span>
           </footer>
         </div>
-        <div className="onboarding-cloud__art" aria-hidden="true">
+        {SHOW_OFFICIAL_CLOUD ? <div className="onboarding-cloud__art" aria-hidden="true">
           <img src="/onboarding/registration-invite-art.webp" alt="" />
-        </div>
+        </div> : null}
       </section>
     );
   }

@@ -1,3 +1,4 @@
+import { SHOW_OFFICIAL_CLOUD, SHOW_UPSTREAM_LINKS } from '../product';
 import { withTaskPresentation, newerTaskDisplay, type PresentedChatMessage } from '../runtime/chat/task-presentation';
 import { reportExperienceEvent } from '../observability/experience-diagnostics';
 import { conversationMetaLabel } from '../runtime/chat/conversation-time';
@@ -2551,7 +2552,7 @@ export function ChatPane({
   const failedRunUsesCloud = retryAssistant?.agentId === 'amr';
   const showCloudRetry = Boolean(retryAssistant && failedRunUsesCloud && onRetry);
   const showCloudSwitchCta = Boolean(
-    retryAssistant && !failedRunUsesCloud
+    SHOW_OFFICIAL_CLOUD && retryAssistant && !failedRunUsesCloud
     && (onSwitchToAmrAndRetry || onOpenAmrSettings),
   );
   const [supportDialogOpen, setSupportDialogOpen] = useState(false);
@@ -4609,7 +4610,7 @@ export function ChatPane({
                     actions={(
                       <>
                         {/* OPEND-2807: two standing actions and one runtime action. */}
-                        <RunErrorCardAction
+                        {SHOW_UPSTREAM_LINKS ? <RunErrorCardAction
                           type="button"
                           className="od-tooltip"
                           variant="secondary"
@@ -4619,7 +4620,7 @@ export function ChatPane({
                         >
                           <Icon name="headset" size={11} />
                           {t('chat.runError.contactSupportCta')}
-                        </RunErrorCardAction>
+                        </RunErrorCardAction> : null}
                         <ExportLogsAction />
                         {showCloudRetry && retryAssistant && onRetry ? (
                           <RunErrorCardAction
@@ -6644,7 +6645,7 @@ export function buildRunErrorDiagnosticText(input: RunErrorDiagnosticInput): str
   }
 
   lines.push(
-    'OpenDesign run error diagnostics',
+    'NexusDesign run error diagnostics',
     `trace_id: ${input.traceId ?? 'n/a'}`,
     `run_id: ${input.traceId ?? 'n/a'}`,
     `error_code: ${input.errorCode ?? 'n/a'}`,

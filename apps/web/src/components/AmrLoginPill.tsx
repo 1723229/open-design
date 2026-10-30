@@ -1,3 +1,4 @@
+import { SHOW_OFFICIAL_CLOUD } from '../product';
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
 import {
   cancelVelaLogin,
@@ -812,6 +813,8 @@ export function AmrLoginPill({
       : loginInFlight
         ? 'signing-in'
         : 'signed-out';
+
+  if (!SHOW_OFFICIAL_CLOUD) return null;
 
   return (
     <div

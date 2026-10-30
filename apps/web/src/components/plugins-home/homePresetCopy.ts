@@ -1806,79 +1806,79 @@ const HOME_PRESET_COPY: Record<string, Record<Locale, HomePresetCopy>> = {
   'example-motion-visual-lesson': {
     'zh-CN': {
       title: '让灵感成真',
-      prompt: '做一支 20 秒的纸张拼贴动画。窗边的女孩写下「OpenDesign, what can you design?」，折成纸飞机寄给 OpenDesign 小伙伴。它通过点按原型、展开网站、翻动 PPT、贴上海报和放映动效来回答，把五件作品收成一本小册子寄回。女孩翻开看到「It starts with your idea.」。保留手工撕纸、水粉笔触、纸片人物和背景音乐。 结尾女孩抱住作品册、挥手感谢，再把写着“What will you design?”的纸贴到窗边，双手收回胸前，向观众发出设计邀请。',
+      prompt: '做一支 20 秒的纸张拼贴动画。窗边的女孩写下「NexusDesign, what can you design?」，折成纸飞机寄给 NexusDesign 小伙伴。它通过点按原型、展开网站、翻动 PPT、贴上海报和放映动效来回答，把五件作品收成一本小册子寄回。女孩翻开看到「It starts with your idea.」。保留手工撕纸、水粉笔触、纸片人物和背景音乐。 结尾女孩抱住作品册、挥手感谢，再把写着“What will you design?”的纸贴到窗边，双手收回胸前，向观众发出设计邀请。',
     },
     'zh-TW': {
       title: '讓靈感成真',
-      prompt: '做一支 20 秒的紙張拼貼動畫。窗邊的女孩寫下「OpenDesign, what can you design?」，摺成紙飛機寄給 OpenDesign 小夥伴。它透過點按原型、展開網站、翻動 PPT、貼上海報和放映動效來回答，把五件作品收成一本小冊子寄回。女孩翻開看到「It starts with your idea.」。保留手工撕紙、水粉筆觸、紙片人物和背景音樂。 結尾女孩抱住作品冊、揮手感謝，再把寫著“What will you design?”的紙貼到窗邊，雙手收回胸前，向觀眾發出設計邀請。',
+      prompt: '做一支 20 秒的紙張拼貼動畫。窗邊的女孩寫下「NexusDesign, what can you design?」，摺成紙飛機寄給 NexusDesign 小夥伴。它透過點按原型、展開網站、翻動 PPT、貼上海報和放映動效來回答，把五件作品收成一本小冊子寄回。女孩翻開看到「It starts with your idea.」。保留手工撕紙、水粉筆觸、紙片人物和背景音樂。 結尾女孩抱住作品冊、揮手感謝，再把寫著“What will you design?”的紙貼到窗邊，雙手收回胸前，向觀眾發出設計邀請。',
     },
     en: {
       title: 'Bring Ideas to Life',
-      prompt: 'Make a 20-second paper-cutout story. A girl sends “OpenDesign, what can you design?” on a paper plane. The OpenDesign buddy answers by tapping an interactive prototype, unfolding a website, turning PPT pages, sticking a poster and animating a filmstrip. The five works become a little book that returns to her: “It starts with your idea.” Keep torn paper, gouache brushwork, cutout characters and the background music. To close, she hugs the book, waves thanks, pins a note reading “What will you design?” beside the window and brings her hands together: an invitation to the viewer.',
+      prompt: 'Make a 20-second paper-cutout story. A girl sends “NexusDesign, what can you design?” on a paper plane. The NexusDesign buddy answers by tapping an interactive prototype, unfolding a website, turning PPT pages, sticking a poster and animating a filmstrip. The five works become a little book that returns to her: “It starts with your idea.” Keep torn paper, gouache brushwork, cutout characters and the background music. To close, she hugs the book, waves thanks, pins a note reading “What will you design?” beside the window and brings her hands together: an invitation to the viewer.',
     },
     id: {
       title: 'Wujudkan Ide',
-      prompt: 'Cerita potongan kertas 20 detik: seorang gadis bertanya apa yang bisa didesain OpenDesign. Prototipe interaktif, situs web, PPT, poster dan film animasi menjadi buku kemungkinan. Semuanya dimulai dari idemu. Di akhir, ia memeluk buku, melambaikan tangan sebagai terima kasih, lalu menempelkan catatan “What will you design?” di dekat jendela dan menyatukan kedua tangan: undangan bagi penonton untuk mendesain.',
+      prompt: 'Cerita potongan kertas 20 detik: seorang gadis bertanya apa yang bisa didesain NexusDesign. Prototipe interaktif, situs web, PPT, poster dan film animasi menjadi buku kemungkinan. Semuanya dimulai dari idemu. Di akhir, ia memeluk buku, melambaikan tangan sebagai terima kasih, lalu menempelkan catatan “What will you design?” di dekat jendela dan menyatukan kedua tangan: undangan bagi penonton untuk mendesain.',
     },
     de: {
       title: 'Ideen zum Leben erwecken',
-      prompt: 'Eine 20-sekündige Papiercollage: Ein Mädchen fragt OpenDesign, was es gestalten kann. Interaktive Prototypen, Websites, Präsentationen, Poster und Animationsfilme werden zu einem Buch voller Möglichkeiten. Alles beginnt mit deiner Idee. Zum Schluss drückt sie das Buch an sich, winkt zum Dank, klebt „What will you design?“ neben das Fenster und legt die Hände zusammen: eine Einladung an das Publikum.',
+      prompt: 'Eine 20-sekündige Papiercollage: Ein Mädchen fragt NexusDesign, was es gestalten kann. Interaktive Prototypen, Websites, Präsentationen, Poster und Animationsfilme werden zu einem Buch voller Möglichkeiten. Alles beginnt mit deiner Idee. Zum Schluss drückt sie das Buch an sich, winkt zum Dank, klebt „What will you design?“ neben das Fenster und legt die Hände zusammen: eine Einladung an das Publikum.',
     },
     'pt-BR': {
       title: 'Dê vida às ideias',
-      prompt: 'Um conto de 20 segundos em recortes de papel: uma menina pergunta o que o OpenDesign pode criar. Protótipos interativos, sites, apresentações, pôsteres e animações viram um livro de possibilidades. Tudo começa com sua ideia. No final, ela abraça o livro, acena em agradecimento, cola “What will you design?” junto à janela e une as mãos, convidando o público a criar seu próprio design.',
+      prompt: 'Um conto de 20 segundos em recortes de papel: uma menina pergunta o que o NexusDesign pode criar. Protótipos interativos, sites, apresentações, pôsteres e animações viram um livro de possibilidades. Tudo começa com sua ideia. No final, ela abraça o livro, acena em agradecimento, cola “What will you design?” junto à janela e une as mãos, convidando o público a criar seu próprio design.',
     },
     'es-ES': {
       title: 'Da vida a tus ideas',
-      prompt: 'Una historia de 20 segundos en papel recortado: una niña pregunta qué puede diseñar OpenDesign. Prototipos interactivos, webs, presentaciones, carteles y animaciones forman un libro de posibilidades. Todo empieza con tu idea. Al final, abraza el libro, saluda en agradecimiento, pega “What will you design?” junto a la ventana y junta las manos: una invitación al público a diseñar.',
+      prompt: 'Una historia de 20 segundos en papel recortado: una niña pregunta qué puede diseñar NexusDesign. Prototipos interactivos, webs, presentaciones, carteles y animaciones forman un libro de posibilidades. Todo empieza con tu idea. Al final, abraza el libro, saluda en agradecimiento, pega “What will you design?” junto a la ventana y junta las manos: una invitación al público a diseñar.',
     },
     ru: {
       title: 'Воплощай идеи в жизнь',
-      prompt: '20-секундная бумажная история: девочка спрашивает, что умеет создавать OpenDesign. Интерактивные прототипы, сайты, презентации, плакаты и анимация собираются в книгу возможностей. Всё начинается с вашей идеи. В финале она обнимает книгу, благодарно машет, приклеивает у окна записку “What will you design?” и складывает ладони: это приглашение зрителю придумать свой дизайн.',
+      prompt: '20-секундная бумажная история: девочка спрашивает, что умеет создавать NexusDesign. Интерактивные прототипы, сайты, презентации, плакаты и анимация собираются в книгу возможностей. Всё начинается с вашей идеи. В финале она обнимает книгу, благодарно машет, приклеивает у окна записку “What will you design?” и складывает ладони: это приглашение зрителю придумать свой дизайн.',
     },
     fa: {
       title: 'به ایده‌ها جان بده',
-      prompt: 'داستان کاغذبری ۲۰ ثانیه‌ای: دختری می‌پرسد OpenDesign چه چیزی می‌تواند طراحی کند. نمونه‌های تعاملی، وب‌سایت‌ها، ارائه‌ها، پوسترها و فیلم‌های متحرک به کتابی از امکان‌ها تبدیل می‌شوند. همه‌چیز با ایدهٔ شما آغاز می‌شود. در پایان، دختر کتاب را در آغوش می‌گیرد، برای تشکر دست تکان می‌دهد، یادداشت «What will you design?» را کنار پنجره می‌چسباند و دست‌هایش را جمع می‌کند؛ دعوتی از تماشاگر برای طراحی.',
+      prompt: 'داستان کاغذبری ۲۰ ثانیه‌ای: دختری می‌پرسد NexusDesign چه چیزی می‌تواند طراحی کند. نمونه‌های تعاملی، وب‌سایت‌ها، ارائه‌ها، پوسترها و فیلم‌های متحرک به کتابی از امکان‌ها تبدیل می‌شوند. همه‌چیز با ایدهٔ شما آغاز می‌شود. در پایان، دختر کتاب را در آغوش می‌گیرد، برای تشکر دست تکان می‌دهد، یادداشت «What will you design?» را کنار پنجره می‌چسباند و دست‌هایش را جمع می‌کند؛ دعوتی از تماشاگر برای طراحی.',
     },
     ar: {
       title: 'امنح أفكارك الحياة',
-      prompt: 'قصة من قصاصات الورق مدتها 20 ثانية: تسأل فتاة عمّا يستطيع OpenDesign تصميمه. نماذج تفاعلية ومواقع وعروض تقديمية وملصقات وأفلام متحركة تجتمع في كتاب من الإمكانات. كل شيء يبدأ بفكرتك. في النهاية تحتضن الكتاب وتلوّح بالشكر، ثم تلصق ورقة تحمل “What will you design?” بجانب النافذة وتضم يديها: دعوة للمشاهد إلى التصميم.',
+      prompt: 'قصة من قصاصات الورق مدتها 20 ثانية: تسأل فتاة عمّا يستطيع NexusDesign تصميمه. نماذج تفاعلية ومواقع وعروض تقديمية وملصقات وأفلام متحركة تجتمع في كتاب من الإمكانات. كل شيء يبدأ بفكرتك. في النهاية تحتضن الكتاب وتلوّح بالشكر، ثم تلصق ورقة تحمل “What will you design?” بجانب النافذة وتضم يديها: دعوة للمشاهد إلى التصميم.',
     },
     ja: {
       title: 'アイデアをかたちに',
-      prompt: '20秒の切り絵風ストーリー。女の子がOpenDesignに「何をデザインできる？」と尋ねると、インタラクティブなプロトタイプ、Webサイト、PPT、ポスター、モーション動画が一冊の作品集になります。始まりは、あなたのアイデア。 最後に女の子が本を抱きしめ、感謝して手を振り、「What will you design?」と書いた紙を窓辺に貼って両手を合わせます。観客にデザインを呼びかける締めくくりです。',
+      prompt: '20秒の切り絵風ストーリー。女の子がNexusDesignに「何をデザインできる？」と尋ねると、インタラクティブなプロトタイプ、Webサイト、PPT、ポスター、モーション動画が一冊の作品集になります。始まりは、あなたのアイデア。 最後に女の子が本を抱きしめ、感謝して手を振り、「What will you design?」と書いた紙を窓辺に貼って両手を合わせます。観客にデザインを呼びかける締めくくりです。',
     },
     ko: {
       title: '아이디어를 현실로',
-      prompt: '20초 종이 콜라주 이야기. 소녀가 OpenDesign에게 무엇을 디자인할 수 있는지 물으면 인터랙티브 프로토타입, 웹사이트, PPT, 포스터, 모션 영상이 작품집으로 모입니다. 당신의 아이디어에서 시작됩니다. 마지막에는 소녀가 책을 안고 감사의 손인사를 한 뒤 “What will you design?” 쪽지를 창가에 붙이고 두 손을 모읍니다. 관객에게 디자인을 권하는 마무리입니다.',
+      prompt: '20초 종이 콜라주 이야기. 소녀가 NexusDesign에게 무엇을 디자인할 수 있는지 물으면 인터랙티브 프로토타입, 웹사이트, PPT, 포스터, 모션 영상이 작품집으로 모입니다. 당신의 아이디어에서 시작됩니다. 마지막에는 소녀가 책을 안고 감사의 손인사를 한 뒤 “What will you design?” 쪽지를 창가에 붙이고 두 손을 모읍니다. 관객에게 디자인을 권하는 마무리입니다.',
     },
     pl: {
       title: 'Tchnij życie w pomysły',
-      prompt: '20-sekundowa opowieść z papierowych wycinanek: dziewczynka pyta, co potrafi projektować OpenDesign. Interaktywne prototypy, strony, prezentacje, plakaty i animacje tworzą książkę możliwości. Wszystko zaczyna się od twojego pomysłu. Na końcu przytula książkę, macha na podziękowanie, przykleja obok okna kartkę „What will you design?” i składa dłonie: to zaproszenie dla widza do projektowania.',
+      prompt: '20-sekundowa opowieść z papierowych wycinanek: dziewczynka pyta, co potrafi projektować NexusDesign. Interaktywne prototypy, strony, prezentacje, plakaty i animacje tworzą książkę możliwości. Wszystko zaczyna się od twojego pomysłu. Na końcu przytula książkę, macha na podziękowanie, przykleja obok okna kartkę „What will you design?” i składa dłonie: to zaproszenie dla widza do projektowania.',
     },
     hu: {
       title: 'Keltsd életre az ötleteket',
-      prompt: '20 másodperces papírkollázs-történet: egy kislány megkérdezi, mit tud tervezni az OpenDesign. Interaktív prototípusok, weboldalak, prezentációk, plakátok és animációk állnak össze a lehetőségek könyvévé. Minden az ötleteddel kezdődik. Végül magához öleli a könyvet, köszönetképpen integet, az ablak mellé ragasztja a „What will you design?” feliratot, és összeteszi a kezét: ezzel a nézőt hívja tervezésre.',
+      prompt: '20 másodperces papírkollázs-történet: egy kislány megkérdezi, mit tud tervezni az NexusDesign. Interaktív prototípusok, weboldalak, prezentációk, plakátok és animációk állnak össze a lehetőségek könyvévé. Minden az ötleteddel kezdődik. Végül magához öleli a könyvet, köszönetképpen integet, az ablak mellé ragasztja a „What will you design?” feliratot, és összeteszi a kezét: ezzel a nézőt hívja tervezésre.',
     },
     fr: {
       title: 'Donnez vie à vos idées',
-      prompt: 'Une histoire de 20 secondes en papier découpé : une fillette demande ce qu’OpenDesign peut créer. Prototypes interactifs, sites, présentations, affiches et animations composent un livre de possibilités. Tout commence par votre idée. Pour finir, elle serre le livre contre elle, fait un signe de remerciement, colle « What will you design? » près de la fenêtre et joint les mains : une invitation adressée au public.',
+      prompt: 'Une histoire de 20 secondes en papier découpé : une fillette demande ce qu’NexusDesign peut créer. Prototypes interactifs, sites, présentations, affiches et animations composent un livre de possibilités. Tout commence par votre idée. Pour finir, elle serre le livre contre elle, fait un signe de remerciement, colle « What will you design? » près de la fenêtre et joint les mains : une invitation adressée au public.',
     },
     uk: {
       title: 'Втілюй ідеї в життя',
-      prompt: '20-секундна історія з паперової аплікації: дівчинка запитує, що вміє створювати OpenDesign. Інтерактивні прототипи, сайти, презентації, плакати й анімації складаються в книгу можливостей. Усе починається з вашої ідеї. Наприкінці вона обіймає книжку, вдячно махає, приклеює біля вікна записку “What will you design?” і складає долоні: це запрошення глядачеві створити власний дизайн.',
+      prompt: '20-секундна історія з паперової аплікації: дівчинка запитує, що вміє створювати NexusDesign. Інтерактивні прототипи, сайти, презентації, плакати й анімації складаються в книгу можливостей. Усе починається з вашої ідеї. Наприкінці вона обіймає книжку, вдячно махає, приклеює біля вікна записку “What will you design?” і складає долоні: це запрошення глядачеві створити власний дизайн.',
     },
     tr: {
       title: 'Fikirlerine Hayat Ver',
-      prompt: '20 saniyelik kâğıt kolaj hikâyesi: bir kız OpenDesign’a neler tasarlayabildiğini sorar. Etkileşimli prototipler, web siteleri, sunumlar, posterler ve animasyonlar bir olasılıklar kitabına dönüşür. Her şey fikrinle başlar. Sonunda kitabı kucaklar, teşekkür için el sallar, pencerenin yanına “What will you design?” yazılı notu yapıştırıp ellerini birleştirir: izleyiciye bir tasarım daveti.',
+      prompt: '20 saniyelik kâğıt kolaj hikâyesi: bir kız NexusDesign’a neler tasarlayabildiğini sorar. Etkileşimli prototipler, web siteleri, sunumlar, posterler ve animasyonlar bir olasılıklar kitabına dönüşür. Her şey fikrinle başlar. Sonunda kitabı kucaklar, teşekkür için el sallar, pencerenin yanına “What will you design?” yazılı notu yapıştırıp ellerini birleştirir: izleyiciye bir tasarım daveti.',
     },
     th: {
       title: 'ทำไอเดียให้เป็นจริง',
-      prompt: 'เรื่องราวกระดาษตัดแปะ 20 วินาที เด็กผู้หญิงถามว่า OpenDesign ออกแบบอะไรได้บ้าง ต้นแบบโต้ตอบ เว็บไซต์ สไลด์ PPT โปสเตอร์ และภาพเคลื่อนไหวรวมเป็นหนังสือแห่งความเป็นไปได้ ทุกอย่างเริ่มจากไอเดียของคุณ ตอนจบเธอกอดหนังสือ โบกมือขอบคุณ แล้วติดกระดาษ “What will you design?” ไว้ข้างหน้าต่างและประสานมือ เป็นคำเชิญให้ผู้ชมออกแบบผลงานของตนเอง',
+      prompt: 'เรื่องราวกระดาษตัดแปะ 20 วินาที เด็กผู้หญิงถามว่า NexusDesign ออกแบบอะไรได้บ้าง ต้นแบบโต้ตอบ เว็บไซต์ สไลด์ PPT โปสเตอร์ และภาพเคลื่อนไหวรวมเป็นหนังสือแห่งความเป็นไปได้ ทุกอย่างเริ่มจากไอเดียของคุณ ตอนจบเธอกอดหนังสือ โบกมือขอบคุณ แล้วติดกระดาษ “What will you design?” ไว้ข้างหน้าต่างและประสานมือ เป็นคำเชิญให้ผู้ชมออกแบบผลงานของตนเอง',
     },
     it: {
       title: 'Dai vita alle idee',
-      prompt: 'Una storia di 20 secondi in carta ritagliata: una bambina chiede cosa sa progettare OpenDesign. Prototipi interattivi, siti, presentazioni, poster e animazioni compongono un libro di possibilità. Tutto inizia dalla tua idea. Alla fine abbraccia il libro, saluta per ringraziare, attacca “What will you design?” accanto alla finestra e unisce le mani: un invito a progettare rivolto al pubblico.',
+      prompt: 'Una storia di 20 secondi in carta ritagliata: una bambina chiede cosa sa progettare NexusDesign. Prototipi interattivi, siti, presentazioni, poster e animazioni compongono un libro di possibilità. Tutto inizia dalla tua idea. Alla fine abbraccia il libro, saluta per ringraziare, attacca “What will you design?” accanto alla finestra e unisce le mani: un invito a progettare rivolto al pubblico.',
     },
   },
   'example-motion-future': {

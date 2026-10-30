@@ -1,3 +1,4 @@
+import { SHOW_UPSTREAM_LINKS } from '../product';
 // Shared GitHub star-count hook backing the topbar pill
 // (`GithubStarBadge`). The browser talks only to the local daemon,
 // which caches GitHub metadata and can return stale-on-error values
@@ -106,6 +107,7 @@ export function useGithubStars(): number | null {
   });
 
   useEffect(() => {
+    if (!SHOW_UPSTREAM_LINKS) return;
     const now = Date.now();
     const cached = memoryCache ?? readPersistedCache();
     if (cached && now - cached.ts < CACHE_TTL_MS) {

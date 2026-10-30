@@ -1,3 +1,4 @@
+import { SHOW_UPSTREAM_LINKS } from '../product';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { OpenDesignHostUpdaterStatusSnapshot } from '@open-design/host';
 
@@ -314,7 +315,7 @@ export function UpdateDialog() {
     void openExternalUrl(RELEASES_URL);
   }, [analytics.track, versionProps]);
 
-  if (!open) return null;
+  if (!SHOW_UPSTREAM_LINKS || !open) return null;
 
   const state = status?.state;
   const ready = state === 'downloaded' && model.hasDownloadedInstaller;

@@ -1,3 +1,4 @@
+import { SHOW_OFFICIAL_CLOUD } from '../product';
 import { validateCommentSaveTarget } from '../comments/validate-save-target';
 import { previewStorageKey, readPreviewStorage, savePreviewStorageMessage } from '../runtime/preview-storage';
 import { commentSelectorsMatch, commentUsesIdentity, ownerCommentNeedsLocation, resolveOwnerCommentAnchor } from '../comments/owner-anchor';
@@ -15787,7 +15788,7 @@ function HtmlViewer({
     hasEverShared: projectShareHistory?.hasEverShared ?? null,
     historyLoading: projectShareHistoryState.status === 'loading',
     historyError: projectShareHistoryState.status === 'error',
-    enabled: workspaceActive && !viewerOnly && rawCanShare && !streaming,
+    enabled: SHOW_OFFICIAL_CLOUD && workspaceActive && !viewerOnly && rawCanShare && !streaming,
   });
   const rawCanDownload = source !== null && (isShareableArtifact || isMarkdownArtifact);
   const canShare = rawCanShare && !viewerOnly;
@@ -17800,7 +17801,7 @@ function HtmlViewer({
                     <span>{t('fileViewer.unifiedExportTab')}</span>
                   </button>
                 ) : null}
-                  <button
+                  {SHOW_OFFICIAL_CLOUD ? <button
                     type="button"
                     className={`chrome-action chrome-action-secondary chrome-action-with-label chrome-action-text-only chrome-action-unified ${shareEntryStyles.toolbar}`}
                     aria-haspopup="menu"
@@ -17814,7 +17815,7 @@ function HtmlViewer({
                     {/* Owner C0: share the artifact card's forward-arrow glyph. */}
                     <RemixIcon name="share-forward-line" size={15} />
                     <span>{shareMenuLabel}</span>
-                  </button>
+                  </button> : null}
                   {afterExportGuide.noticeId !== null ? (
                     <AfterExportShareGuide
                       key={afterExportGuide.noticeId}
@@ -17884,7 +17885,7 @@ function HtmlViewer({
                         : undefined
                     }
                   >
-                    {unifiedActionTab === 'share' && rawCanShare ? (
+                    {SHOW_OFFICIAL_CLOUD && unifiedActionTab === 'share' && rawCanShare ? (
                       <>
                       <SharePanelHeader
                         title={t('fileViewer.unifiedShareTab')}

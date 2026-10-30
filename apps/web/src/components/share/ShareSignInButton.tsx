@@ -1,3 +1,4 @@
+import { SHOW_OFFICIAL_CLOUD } from '../../product';
 import { useT } from '../../i18n';
 import { useCloudSignIn } from '../use-cloud-sign-in';
 import { AmrActivationHintText } from '../AmrActivationHintText';
@@ -28,6 +29,7 @@ export function ShareSignInButton({ variant, actionLabel, onLoginSuccess }: {
   const t = useT();
   const { state, status, begin, cancel } = useCloudSignIn({ onLoginSuccess });
   const signing = state === 'signing';
+  if (!SHOW_OFFICIAL_CLOUD) return null;
 
   return (
     <div className={styles.wrap}>

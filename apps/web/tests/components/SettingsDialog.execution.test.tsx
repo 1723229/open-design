@@ -2818,6 +2818,24 @@ describe('SettingsDialog execution settings Local CLI interactions', () => {
     ]);
   });
 
+  it('hides upstream fallback help while retaining vendor installation links', () => {
+    renderSettingsDialog({ mode: 'daemon', agentId: null }, {
+      agents: [
+        { ...availableAgents[0]!, available: false,
+          installUrl: 'https://github.com/nexu-io/open-design/blob/main/docs/agent-adapters.md',
+          docsUrl: 'https://open-design.ai/docs' },
+        { ...availableAgents[0]!, id: 'kimi', name: 'Kimi CLI', available: false,
+          installUrl: 'https://github.com/MoonshotAI/kimi-cli' },
+      ],
+    });
+    const summary = screen.getByText('Available CLIs (2)');
+    if (!summary.closest('details')?.open) fireEvent.click(summary);
+    const links = screen.getAllByRole('link').map(link => link.getAttribute('href'));
+    expect(links).toContain('https://github.com/MoonshotAI/kimi-cli');
+    expect(links.some(href => /nexu-io\/open-design|open-design\.ai/.test(href ?? ''))).toBe(false);
+    expect(screen.queryByTestId('settings-agent-card-amr')).toBeNull();
+  });
+
   it('lets users switch to Local CLI, select an installed agent, and autosave', async () => {
     const installed = availableAgents[0]!;
     const unavailable: AgentInfo = {

@@ -1,3 +1,4 @@
+import { SHOW_OFFICIAL_CLOUD } from '../product';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { getResolvedDeviceId } from '../analytics/client';
@@ -270,7 +271,7 @@ export function AvatarMenu({
     () => agents.find((a) => a.id === 'amr' && a.available) ?? null,
     [agents],
   );
-  const amrAvailable = amrAgent !== null;
+  const amrAvailable = SHOW_OFFICIAL_CLOUD && amrAgent !== null;
   const amrProfile = config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE;
 
   // Fetch the live login status when the popover opens so plan-gated model

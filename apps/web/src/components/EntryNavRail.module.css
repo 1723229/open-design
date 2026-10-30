@@ -4,6 +4,17 @@
    team/local shell pieces (workspace identity strip, search, section label,
    sign-in callout, locked banner, footer social). */
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 16px 18px;
+  color: var(--text-strong);
+  font-size: 15px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
 .workspace {
   display: flex;
   flex-direction: column;

@@ -405,7 +405,7 @@ export function PetSettings({ cfg, setCfg }: Props) {
       '4. Run the deterministic scripts (extract / compose / validate / contact-sheet / videos).',
       '5. Package the result into ${CODEX_HOME:-$HOME/.codex}/pets/<pet-name>/ with pet.json + spritesheet.webp.',
       '',
-      'When the spritesheet is saved, tell me the absolute path so I can import it into OpenDesign via Settings → Pets → Import Codex sprite.',
+      'When the spritesheet is saved, tell me the absolute path so I can import it into NexusDesign via Settings → Pets → Import Codex sprite.',
     ].join('\n');
   }, [hatchConcept]);
 

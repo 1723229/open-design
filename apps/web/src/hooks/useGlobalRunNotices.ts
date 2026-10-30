@@ -28,7 +28,7 @@ import type { Dict } from '../i18n/types';
 
 const POLL_MS = 3_000;
 /** Notification title when the project's name is unknown. A product name, not copy. */
-const FALLBACK_TITLE = 'Open Design';
+const FALLBACK_TITLE = 'NexusDesign';
 
 export interface UseGlobalRunNoticesOptions {
   enabled: boolean;

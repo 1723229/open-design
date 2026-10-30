@@ -37,13 +37,13 @@ export function buildPluginFolderAgentActionPrompt(
 //     plugin-folder buttons to satisfy.
 function buildContributePrompt(folderPath: string): string {
   return [
-    'Open a draft Pull Request that adds this generated plugin to the OpenDesign community catalog at `nexu-io/open-design`.',
+    'Open a draft Pull Request that adds this generated plugin to the NexusDesign community catalog at `nexu-io/open-design`.',
     'The goal is to end this turn with a single PR URL the user can click in their browser to review the pre-filled form and press Create.',
     '',
     `Plugin folder: \`${folderPath}\``,
     `Manifest: \`${folderPath}/open-design.json\``,
     '',
-    'Run this deterministic OpenDesign CLI workflow from the current project workspace:',
+    'Run this deterministic NexusDesign CLI workflow from the current project workspace:',
     '',
     `\`"$OD_NODE_BIN" "$OD_BIN" plugin open-design-pr ${folderPath}\``,
     '',
@@ -76,9 +76,9 @@ function buildPublishPrompt(folderPath: string): string {
     `Plugin folder: \`${folderPath}\``,
     `Manifest: \`${folderPath}/open-design.json\``,
     '',
-    'This is the **repository publish** action, NOT the registry-submission action — do NOT route through `od plugin publish --to open-design`. That command emits an OpenDesign issue URL and belongs to the "OpenDesign PR" button.',
+    'This is the **repository publish** action, NOT the registry-submission action — do NOT route through `od plugin publish --to open-design`. That command emits an NexusDesign issue URL and belongs to the "NexusDesign PR" button.',
     '',
-    'Run this deterministic OpenDesign CLI workflow from the current project workspace:',
+    'Run this deterministic NexusDesign CLI workflow from the current project workspace:',
     '',
     `\`"$OD_NODE_BIN" "$OD_BIN" plugin publish-repo ${folderPath}\``,
     '',

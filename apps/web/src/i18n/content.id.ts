@@ -849,7 +849,7 @@ export const ID_SKILL_COPY: Record<string, { description?: string; examplePrompt
   },
   'ui-ux-pro-max': {
     description:
-      'Entri UI/UX Pro Max khusus katalog. Template, data, dan alur kerja pencarian upstream lengkap tidak disertakan dalam OpenDesign.',
+      'Entri UI/UX Pro Max khusus katalog. Template, data, dan alur kerja pencarian upstream lengkap tidak disertakan dalam NexusDesign.',
     examplePrompt:
       'Entri UI/UX Pro Max khusus katalog.',
   },

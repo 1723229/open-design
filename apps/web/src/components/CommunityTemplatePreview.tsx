@@ -166,7 +166,7 @@ function templateAuthor(
   const named = record.manifest?.author?.name?.trim();
   if (named) return named;
   return record.sourceKind === 'bundled' || record.sourceKind === 'marketplace'
-    ? 'Open Design'
+    ? 'NexusDesign'
     : t('chat.you');
 }
 
@@ -434,7 +434,7 @@ function templatePreviewHtml(template: TemplateDemo): string {
     <section class="sections">
       <div class="section"><b>Structure</b><span>Ready-made sections and hierarchy.</span></div>
       <div class="section"><b>Visual System</b><span>Color, type, rhythm, and reusable blocks.</span></div>
-      <div class="section"><b>Editable</b><span>Remix into a real OpenDesign project.</span></div>
+      <div class="section"><b>Editable</b><span>Remix into a real NexusDesign project.</span></div>
     </section>
   </main>
 </body>

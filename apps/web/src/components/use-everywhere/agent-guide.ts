@@ -48,11 +48,11 @@ export function buildAgentGuideMarkdown(options: AgentGuideOptions = {}): string
   const installInfo = normalizeMcpInstallInfo(options.mcpInstallInfo);
   const lines: string[] = [];
 
-  lines.push('# OpenDesign — agent setup guide');
+  lines.push('# NexusDesign — agent setup guide');
   lines.push('');
   lines.push(
     'You are a coding agent (Claude Code, Codex, Cursor, openclaw, hermes, or similar). ' +
-      'The user wants OpenDesign wired into your workflow. OpenDesign is a local ' +
+      'The user wants NexusDesign wired into your workflow. NexusDesign is a local ' +
       'privileged daemon (`od`) plus a Skills + Design-Systems registry that exposes ' +
       'four interchangeable surfaces: CLI, HTTP API, MCP, and Skills.',
   );
@@ -60,7 +60,7 @@ export function buildAgentGuideMarkdown(options: AgentGuideOptions = {}): string
   lines.push('Follow the setup checklist, then keep the reference sections handy.');
   if (options.versionHint) {
     lines.push('');
-    lines.push(`> Reported OpenDesign version: \`${options.versionHint}\``);
+    lines.push(`> Reported NexusDesign version: \`${options.versionHint}\``);
   }
   lines.push('');
 
@@ -72,7 +72,7 @@ export function buildAgentGuideMarkdown(options: AgentGuideOptions = {}): string
   lines.push(`   curl -s ${daemonUrl}/api/health | jq`);
   lines.push('   ```');
   lines.push('');
-  lines.push('   If it 404s or times out, ask the user to run `pnpm tools-dev` (dev) or open the OpenDesign app (packaged).');
+  lines.push('   If it 404s or times out, ask the user to run `pnpm tools-dev` (dev) or open the NexusDesign app (packaged).');
   lines.push('');
   if (installInfo) {
     lines.push('2. Use this daemon-reported MCP server config. Do not replace it with a bare `od` command:');

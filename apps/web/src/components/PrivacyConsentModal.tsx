@@ -1,3 +1,4 @@
+import { SHOW_UPSTREAM_LINKS } from '../product';
 import { useAnalytics } from '../analytics/provider';
 import { trackPrivacyModalClick } from '../analytics/events';
 import { useT } from '../i18n';
@@ -52,7 +53,7 @@ export function PrivacyConsentModal({ onShare, onDecline }: Props): JSX.Element 
 
       <p className="hint privacy-consent-banner-footer">{t('settings.privacyConsentFooter')}</p>
 
-      <a
+      {SHOW_UPSTREAM_LINKS ? <a
         className="privacy-consent-policy-link"
         href={PRIVACY_POLICY_URL}
         target="_blank"
@@ -60,7 +61,7 @@ export function PrivacyConsentModal({ onShare, onDecline }: Props): JSX.Element 
       >
         <Icon name="external-link" size={14} />
         <span>{t('settings.privacyConsentPolicyLink')}</span>
-      </a>
+      </a> : null}
 
       <div
         className="privacy-consent-actions"

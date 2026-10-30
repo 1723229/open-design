@@ -10,7 +10,7 @@ vi.mock('../../src/components/use-cloud-sign-in', () => ({ useCloudSignIn: ({ on
   login.success = onLoginSuccess; return { state: 'idle', status: null, begin: login.begin, cancel: vi.fn() };
 } }));
 vi.mock('../../src/components/InviteDialog', () => ({ InviteDialog: () => <div role="dialog" aria-label="邀请成员" /> }));
-afterEach(() => { cleanup(); window.localStorage.clear(); login.begin.mockClear(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); window.localStorage.clear(); login.begin.mockClear(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 const context = {
   workspaceId: 'one', workspaceMemberId: 'member-one', workspaceType: 'team', role: 'member',
   lifecycleState: 'active', memberStatus: 'active',
@@ -20,6 +20,13 @@ function view(accountId = 'account-one', workspace = context) {
   return <I18nProvider initial="zh-CN"><HomeInviteTrigger context={workspace} /><HomeInviteSurface accountId={accountId} context={workspace} active /></I18nProvider>;
 }
 describe('home invitation entry', () => {
+  it('renders the invitation entry and banner on HTTP origins without native randomUUID', () => {
+    vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
+    render(view());
+    expect(screen.getAllByRole('button', { name: '邀请' })).toHaveLength(2);
+    expect(screen.getByRole('region')).toBeTruthy();
+  });
+
   it('keeps dismissal across workspace switches and remounts, separately per account', () => {
     const result = render(view());
     fireEvent.click(screen.getByRole('button', { name: '关闭邀请横条' }));

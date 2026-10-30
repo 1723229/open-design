@@ -30,7 +30,7 @@ describe('availableVisibleAgentCount', () => {
     ];
 
     expect(agents.filter((a) => a.available).length).toBe(3);
-    expect(availableVisibleAgentCount(agents)).toBe(2);
+    expect(availableVisibleAgentCount(agents)).toBe(1);
   });
 
   it('ignores unavailable agents', () => {
@@ -39,7 +39,7 @@ describe('availableVisibleAgentCount', () => {
       agent({ id: 'codex', available: false }),
     ];
 
-    expect(availableVisibleAgentCount(agents)).toBe(1);
+    expect(availableVisibleAgentCount(agents)).toBe(0);
   });
 
   it('counts nothing when every agent is hidden or unavailable', () => {
@@ -53,9 +53,11 @@ describe('availableVisibleAgentCount', () => {
 });
 
 describe('isVisibleLocalCliAgent', () => {
-  it('hides only the internal BYOK OpenCode runtime', () => {
+  it('hides the official cloud and internal BYOK runtimes, keeping local CLIs', () => {
+    expect(isVisibleLocalCliAgent({ id: 'amr' })).toBe(false);
     expect(isVisibleLocalCliAgent({ id: 'byok-opencode' })).toBe(false);
     expect(isVisibleLocalCliAgent({ id: 'opencode' })).toBe(true);
+    expect(isVisibleLocalCliAgent({ id: 'codex' })).toBe(true);
   });
 });
 

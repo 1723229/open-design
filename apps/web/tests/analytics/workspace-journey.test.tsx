@@ -5,12 +5,19 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useWorkspaceJourney } from '../../src/analytics/use-workspace-journey';
 const track = vi.hoisted(() => vi.fn());
 vi.mock('../../src/analytics/provider', () => ({ useAnalytics: () => ({ track }) }));
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 beforeEach(() => track.mockReset());
 function Surface({ visible = true, workspace = 'one' }: { visible?: boolean; workspace?: string }) {
   const journey = useWorkspaceJourney({ page_name: 'home', area: 'credit_exhausted_dialog', reason: 'credit_exhausted', workspace_key: workspace }, visible);
   return <button onClick={() => journey.click('close')}>close</button>;
 }
+it('tracks a visible workspace surface on HTTP origins without native randomUUID', () => {
+  vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
+  render(<Surface />);
+  fireEvent.click(screen.getByRole('button'));
+  expect(track.mock.calls.map(([event]) => event)).toEqual(['surface_view', 'ui_click']);
+  expect(track.mock.calls[1]![1].block_id).toBe(track.mock.calls[0]![1].block_id);
+});
 it('only exposes visible instances and associates clicks with the same block', () => {
   const view = render(<StrictMode><Surface visible={false} /></StrictMode>);
   expect(track).not.toHaveBeenCalled();

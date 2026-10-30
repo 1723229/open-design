@@ -1,3 +1,4 @@
+import { SHOW_OFFICIAL_CLOUD, SHOW_UPSTREAM_LINKS } from '../product';
 import { WorkspaceQuotaPopover } from './WorkspaceQuotaPopover';
 import { workspaceQuotaView } from '../collab/workspace-quota-view';
 import planCardStyles from './PersonalPlanCard.module.css';
@@ -1375,6 +1376,8 @@ export function EntryTopRightCluster({
   const clusterVisible = Boolean(leadingSlot || inviteSlot || context || updaterControlVisible);
   const updaterHostVisible = !updaterInRail && Boolean(context || updaterControlVisible);
 
+  if (!SHOW_OFFICIAL_CLOUD) return null;
+
   return (
     <>
       {createPortal(
@@ -1924,7 +1927,7 @@ function RailSocialRow({
   }
 
   return (
-    <div className="entry-nav-rail__menu-social" data-testid="entry-nav-rail-social">
+    SHOW_UPSTREAM_LINKS ? <div className="entry-nav-rail__menu-social" data-testid="entry-nav-rail-social">
       <a
         className={btnClass}
         href={community.href}
@@ -1958,7 +1961,7 @@ function RailSocialRow({
       >
         <Icon name="mail" size={glyph} />
       </a>
-    </div>
+    </div> : null
   );
 }
 
@@ -2275,6 +2278,11 @@ export function EntryNavRail({
       <div className="entry-nav-rail__panel">
       <div className="entry-nav-rail__group">
 
+        <div className={styles.brand}>
+          <img src="/app-icon.svg" alt="" width={26} height={26} />
+          <span>{t('app.brand')}</span>
+        </div>
+
         {context ? (
           <div className="entry-nav-rail__team-wrap">
             <button
@@ -2446,7 +2454,7 @@ export function EntryNavRail({
         >
           <Icon name="home" size={16} />
         </NavButton>
-        <NavButton
+        {SHOW_UPSTREAM_LINKS ? <NavButton
           active={view === 'community'}
           ariaLabel={communityLabel}
           label={communityLabel}
@@ -2454,7 +2462,7 @@ export function EntryNavRail({
           testId="entry-nav-community"
         >
           <Icon name="globe" size={16} />
-        </NavButton>
+        </NavButton> : null}
 
         {context ? (
           <div className="entry-nav-rail__team-section">

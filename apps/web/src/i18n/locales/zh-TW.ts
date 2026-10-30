@@ -2304,9 +2304,9 @@ export const zhTW: Dict = {
   "socialShare.publishPageSubtitle": "發布目前預覽，以便分享到社群平台。",
   "socialShare.projectTitle": "{title} · NexusDesign",
   "socialShare.projectText":
-    "我用 NexusDesign 做了 {title}。查看已部署產物，也推薦收藏倉庫：{repo}",
+    "我用 NexusDesign 做了 {title}",
   "socialShare.projectCopyText":
-    "我用 NexusDesign 做了 {title}\n{url}\nOpenDesign 倉庫：{repo}",
+    "我用 NexusDesign 做了 {title}\n{url}",
   "socialShare.deployFirst": "先部署，再分享到社群…",
   "socialShare.copied": "已複製",
   "socialShare.platform.x": "X",

@@ -168,7 +168,7 @@ describe('PluginShareMenu', () => {
     expect(writes).toContain('agentic-ds');
   });
 
-  it('copies a README badge that links back to the marketplace detail page', async () => {
+  it('hides the upstream README badge for bundled plugins', () => {
     renderMenu(make({
       id: 'badge-plugin',
       title: 'Badge Plugin',
@@ -176,12 +176,8 @@ describe('PluginShareMenu', () => {
       marketplaceEntryName: 'open-design/badge-plugin',
     }));
     openPopover();
-    clickItem('Copy README badge');
-    await Promise.resolve();
-    expect(writes.some((value) => (
-      value.includes('Badge Plugin') &&
-      value.includes('https://open-design.ai/plugins/badge-plugin')
-    ))).toBe(true);
+    expect(container.textContent).not.toContain('Copy README badge');
+    expect(writes).toEqual([]);
   });
 
   it('does not expose public share artifacts for local-only plugins', () => {
@@ -236,14 +232,14 @@ describe('PluginShareMenu', () => {
     ).map((item) => item.textContent ?? '');
     expect(labels).toContain('复制安装命令');
     expect(labels).toContain('复制插件 ID');
-    expect(labels).toContain('复制 README 徽章');
-    expect(labels).toContain('在 GitHub 打开源码');
-    expect(labels).toContain('打开项目主页');
+    expect(labels).not.toContain('复制 README 徽章');
+    expect(labels).not.toContain('在 GitHub 打开源码');
+    expect(labels).not.toContain('打开项目主页');
     expect(labels).toContain('在插件市场打开');
     expect(labels.some((label) => label.includes('Copy install command'))).toBe(false);
   });
 
-  it('points Open in marketplace at the public open-design.ai page for bundled plugins', () => {
+  it('opens bundled plugins in the local marketplace', () => {
     renderMenu(make({ id: 'plain' }));
     openPopover();
     const items = Array.from(
@@ -255,10 +251,8 @@ describe('PluginShareMenu', () => {
     const marketplaceLink = Array.from(
       container.querySelectorAll<HTMLAnchorElement>('a.plugin-share-item'),
     ).find((link) => link.textContent?.includes('Open in marketplace'));
-    // Bundled plugins have a public detail page, so the link is the public
-    // open-design.ai URL — not a local /marketplace path.
     expect(marketplaceLink?.getAttribute('href')).toBe(
-      'https://open-design.ai/plugins/plain/',
+      '/marketplace/plain',
     );
   });
 
@@ -286,7 +280,7 @@ describe('PluginShareMenu', () => {
     ).toBe('https://open-design.ai/plugins/registry-starter/');
   });
 
-  it('copies a README badge for community marketplace plugins', async () => {
+  it('hides the upstream README badge for community marketplace plugins', () => {
     renderMenu(
       make({
         id: 'community-registry-starter',
@@ -298,18 +292,11 @@ describe('PluginShareMenu', () => {
       }),
     );
     openPopover();
-    clickItem('Copy README badge');
-    await Promise.resolve();
-    expect(
-      writes.some(
-        (value) =>
-          value.includes('Community Registry Starter') &&
-          value.includes('https://open-design.ai/plugins/registry-starter/'),
-      ),
-    ).toBe(true);
+    expect(container.textContent).not.toContain('Copy README badge');
+    expect(writes).toEqual([]);
   });
 
-  it('points Open in marketplace at the public page for community marketplace plugins', () => {
+  it('opens community marketplace plugins in the local marketplace', () => {
     renderMenu(
       make({
         id: 'community-registry-starter',
@@ -324,11 +311,11 @@ describe('PluginShareMenu', () => {
       container.querySelectorAll<HTMLAnchorElement>('a.plugin-share-item'),
     ).find((link) => link.textContent?.includes('Open in marketplace'));
     expect(marketplaceLink?.getAttribute('href')).toBe(
-      'https://open-design.ai/plugins/registry-starter/',
+      '/marketplace/community-registry-starter',
     );
   });
 
-  it('surfaces the GitHub source link when sourceKind is github', () => {
+  it('hides the GitHub source action when upstream links are disabled', () => {
     renderMenu(
       make({
         id: 'gh-with-link',
@@ -341,15 +328,15 @@ describe('PluginShareMenu', () => {
       container.querySelectorAll('.plugin-share-item'),
     ) as HTMLElement[];
     expect(items.some((b) => b.textContent?.includes('Open source on GitHub'))).toBe(
-      true,
+      false,
     );
     const sourceLink = container.querySelector<HTMLAnchorElement>(
       'a.plugin-share-item[href="https://github.com/owner/repo"]',
     );
-    expect(sourceLink).toBeTruthy();
+    expect(sourceLink).toBeNull();
   });
 
-  it('surfaces the homepage link when manifest.homepage is set', () => {
+  it('hides the homepage action when upstream links are disabled', () => {
     renderMenu(
       make({
         id: 'with-homepage',
@@ -362,16 +349,15 @@ describe('PluginShareMenu', () => {
       container.querySelectorAll('.plugin-share-item'),
     ) as HTMLElement[];
     expect(items.some((b) => b.textContent?.includes('Open homepage'))).toBe(
-      true,
+      false,
     );
     const homepageLink = Array.from(
       container.querySelectorAll<HTMLAnchorElement>('a.plugin-share-item'),
     ).find((link) => link.textContent?.includes('Open homepage'));
-    expect(homepageLink).toBeTruthy();
-    expect(homepageLink?.getAttribute('href')).toBe('https://example.test/plugin-home');
+    expect(homepageLink).toBeUndefined();
   });
 
-  it('renders official bundled repo links as anchors', () => {
+  it('hides official bundled repo links', () => {
     renderMenu(
       make({
         id: 'official-plugin',
@@ -385,9 +371,9 @@ describe('PluginShareMenu', () => {
         'a.plugin-share-item[href="https://github.com/nexu-io/open-design"]',
       ),
     );
-    expect(repoLinks.length).toBeGreaterThan(0);
+    expect(repoLinks).toHaveLength(0);
     expect(
       repoLinks.some((link) => link.textContent?.includes('Open source on GitHub')),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

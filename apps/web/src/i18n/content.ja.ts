@@ -21,7 +21,7 @@ export const JA_SKILL_COPY: Record<string, { description?: string; examplePrompt
   },
   'agent-browser': {
     description:
-      'AI エージェント向けのブラウザ自動化 CLI。ページの遷移、フォーム入力、\nボタンのクリック、スクリーンショット取得、ページデータの抽出、選択された\nOpenDesign ブラウザタブのコンテキスト読み取り、Web アプリのテスト、NexusDesign\nプレビューのドッグフーディング、QA、バグ調査、アプリ品質のレビューなど、ブラウザの\n挙動を検査・テスト・自動化したい場合に使用します。ユーザーが外部ブラウジングを明示的に\n要求しない限り、ローカルの NexusDesign プレビュー URL を優先します。',
+      'AI エージェント向けのブラウザ自動化 CLI。ページの遷移、フォーム入力、\nボタンのクリック、スクリーンショット取得、ページデータの抽出、選択された\nNexusDesign ブラウザタブのコンテキスト読み取り、Web アプリのテスト、NexusDesign\nプレビューのドッグフーディング、QA、バグ調査、アプリ品質のレビューなど、ブラウザの\n挙動を検査・テスト・自動化したい場合に使用します。ユーザーが外部ブラウジングを明示的に\n要求しない限り、ローカルの NexusDesign プレビュー URL を優先します。',
     examplePrompt:
       'AI エージェント向けのブラウザ自動化 CLI。',
   },

@@ -2293,9 +2293,9 @@ export const zhCN: Dict = {
   "socialShare.publishPageSubtitle": "发布当前预览，以便分享到社媒平台。",
   "socialShare.projectTitle": "{title} · NexusDesign",
   "socialShare.projectText":
-    "我用 NexusDesign 做了 {title}。查看已部署产物，也推荐收藏仓库：{repo}",
+    "我用 NexusDesign 做了 {title}",
   "socialShare.projectCopyText":
-    "我用 NexusDesign 做了 {title}\n{url}\nOpenDesign 仓库：{repo}",
+    "我用 NexusDesign 做了 {title}\n{url}",
   "socialShare.deployFirst": "先部署，再分享到社媒…",
   "socialShare.copied": "已复制",
   "socialShare.platform.x": "X",

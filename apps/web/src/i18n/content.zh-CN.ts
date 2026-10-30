@@ -25,7 +25,7 @@ export const ZH_CN_SKILL_COPY: Record<string, { description?: string; examplePro
   },
   'agent-browser': {
     description:
-      '面向 AI agent 的浏览器自动化 CLI。当用户需要检查、\n测试或自动化浏览器行为时使用：导航页面、填写表单、\n点击按钮、截图、提取页面数据、读取选中的\nOpenDesign 浏览器标签页上下文、测试 web 应用、试用 NexusDesign\n预览、QA、缺陷排查或评审应用质量。除非用户明确要求外部浏览，\n否则优先使用本地 NexusDesign 预览 URL。',
+      '面向 AI agent 的浏览器自动化 CLI。当用户需要检查、\n测试或自动化浏览器行为时使用：导航页面、填写表单、\n点击按钮、截图、提取页面数据、读取选中的\nNexusDesign 浏览器标签页上下文、测试 web 应用、试用 NexusDesign\n预览、QA、缺陷排查或评审应用质量。除非用户明确要求外部浏览，\n否则优先使用本地 NexusDesign 预览 URL。',
     examplePrompt:
       '面向 AI agent 的浏览器自动化 CLI。',
   },

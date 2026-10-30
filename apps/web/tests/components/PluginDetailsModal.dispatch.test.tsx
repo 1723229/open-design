@@ -430,7 +430,7 @@ describe('PluginDetailsModal common metadata coverage', () => {
     expect(html).not.toContain('plugin-meta-sections__heading');
   });
 
-  it('routes official plugin author and source links to the OpenDesign repo', () => {
+  it('shows official plugin branding without upstream author or source links', () => {
     const html = render(
       pluginWithMeta({
         id: 'official-link-meta',
@@ -439,8 +439,9 @@ describe('PluginDetailsModal common metadata coverage', () => {
       }),
     );
 
-    expect(html).toContain('href="https://github.com/nexu-io/open-design"');
-    expect(html).toContain('nexu-io/open-design');
+    expect(html).toContain('NexusDesign');
+    expect(html).toContain('/logo-mark.svg');
+    expect(html).not.toContain('https://github.com/nexu-io');
     expect(html).toContain('Official');
   });
 });

@@ -813,7 +813,7 @@ function codexExecutableGuidance(
   ) {
     return '';
   }
-  return ` Configured Codex path failed: ${configuredOverridePath}. OpenDesign also detected a PATH Codex CLI at ${pathResolvedPath}. Update CODEX_BIN or clear the custom path to use the detected binary.`;
+  return ` Configured Codex path failed: ${configuredOverridePath}. NexusDesign also detected a PATH Codex CLI at ${pathResolvedPath}. Update CODEX_BIN or clear the custom path to use the detected binary.`;
 }
 
 function codexExecutableFallbackSuccessDetail(

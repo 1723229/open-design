@@ -186,7 +186,7 @@ export async function startCallbackListener(
       if (err.code === 'EADDRINUSE') {
         reject(
           new Error(
-            `Port ${port} is already in use — close any other process listening on ${host}:${port} (e.g. an in-flight Hermes or OpenDesign OAuth flow) and try again`,
+            `Port ${port} is already in use — close any other process listening on ${host}:${port} (e.g. an in-flight Hermes or NexusDesign OAuth flow) and try again`,
           ),
         );
       } else {
@@ -225,19 +225,19 @@ export async function startCallbackListener(
 function renderResultPage(outcome: CallbackOutcome): string {
   if (outcome.kind === 'ok') {
     return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>OpenDesign — xAI authorized</title></head>
+<html lang="en"><head><meta charset="utf-8"><title>NexusDesign — xAI authorized</title></head>
 <body style="font:14px system-ui;padding:40px;max-width:480px;margin:auto;text-align:center;color:#222;">
   <h1 style="font-size:18px;margin:0 0 12px;">Authorized!</h1>
-  <p style="color:#666;">OpenDesign now has access to your SuperGrok subscription. You can close this tab and return to OpenDesign.</p>
+  <p style="color:#666;">NexusDesign now has access to your SuperGrok subscription. You can close this tab and return to NexusDesign.</p>
 </body></html>`;
   }
   const reason = escapeHtml(outcome.error || 'unknown error');
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>OpenDesign — sign-in failed</title></head>
+<html lang="en"><head><meta charset="utf-8"><title>NexusDesign — sign-in failed</title></head>
 <body style="font:14px system-ui;padding:40px;max-width:480px;margin:auto;text-align:center;color:#222;">
   <h1 style="font-size:18px;margin:0 0 12px;">Sign-in failed</h1>
   <p style="color:#c00;">${reason}</p>
-  <p style="color:#666;">Close this tab and click <em>Sign in with X</em> again in OpenDesign.</p>
+  <p style="color:#666;">Close this tab and click <em>Sign in with X</em> again in NexusDesign.</p>
 </body></html>`;
 }
 

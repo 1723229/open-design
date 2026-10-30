@@ -18,6 +18,7 @@
  *    `data:` payloads in a manifest from rendering as live links.
  */
 import type { InstalledPluginRecord } from '@open-design/contracts';
+import { SHOW_UPSTREAM_LINKS } from '../product';
 
 export interface PluginSourceLinks {
   /** Browseable URL for the install source, or null when the source
@@ -124,11 +125,12 @@ export function derivePluginSourceLinks(
   const homepageRaw = (manifest as { homepage?: unknown }).homepage;
   const officialBundled = record.sourceKind === 'bundled';
 
-  const authorName = typeof author.name === 'string' && author.name.trim().length > 0
-    ? author.name.trim()
-    : null;
-  const authorProfileUrl = officialBundled ? OPEN_DESIGN_REPO_URL : safeHttpUrl(author.url);
-  const homepageUrl = officialBundled ? OPEN_DESIGN_REPO_URL : safeHttpUrl(homepageRaw);
+  const authorName = officialBundled ? 'NexusDesign'
+    : typeof author.name === 'string' && author.name.trim().length > 0
+      ? author.name.trim()
+      : null;
+  const authorProfileUrl = officialBundled ? (SHOW_UPSTREAM_LINKS ? OPEN_DESIGN_REPO_URL : null) : safeHttpUrl(author.url);
+  const homepageUrl = officialBundled ? (SHOW_UPSTREAM_LINKS ? OPEN_DESIGN_REPO_URL : null) : safeHttpUrl(homepageRaw);
 
   // Source URL + label resolution. The github:owner/repo case wins
   // because we can produce a deep `tree/<ref>/<sub>` URL when the
@@ -172,7 +174,7 @@ export function derivePluginSourceLinks(
   } else if (record.sourceKind === 'marketplace') {
     sourceLabel = record.source;
   } else if (officialBundled) {
-    sourceUrl = OPEN_DESIGN_REPO_URL;
+    sourceUrl = SHOW_UPSTREAM_LINKS ? OPEN_DESIGN_REPO_URL : null;
     sourceLabel = OPEN_DESIGN_REPO_LABEL;
   } else {
     // user / project / local — the source string is a filesystem
@@ -199,7 +201,7 @@ export function derivePluginSourceLinks(
   // both user and organisation accounts without authentication. The
   // fallback also works when author.url is a repo URL — we extract
   // the owner segment for the avatar.
-  let authorAvatarUrl: string | null = null;
+  let authorAvatarUrl: string | null = officialBundled ? '/logo-mark.svg' : null;
   if (authorProfileUrl) {
     const username = githubUsername(authorProfileUrl);
     if (username) {

@@ -4586,7 +4586,7 @@ function fallbackPluginPresetPrompt(
 const HOME_PROMPT_EXAMPLES: Record<Locale, Record<string, string[]>> = {
   "en": {
     "web-clone": [
-      "Website URL to clone: https://open-design.ai",
+      "Website URL to clone: https://example.com",
     ],
     prototype: [
       "Design a high-converting website for an AI CRM with a clear hero, feature story, proof points, and trial CTA",

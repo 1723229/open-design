@@ -44,7 +44,6 @@ import {
   resolveCommentTargetTitle,
   hasUnreadComments,
   type ProjectCommentReadState,
-  OPEN_DESIGN_GITHUB_REPO_URL,
   type CollabCloudMemberDirectoryEntry,
   type CollabMemberRole,
   type AgentInfo,
@@ -16683,7 +16682,6 @@ function HtmlViewer({
     const title = t('socialShare.projectTitle', { title: exportTitle });
     const text = t('socialShare.projectText', {
       title: exportTitle,
-      repo: OPEN_DESIGN_GITHUB_REPO_URL,
     });
     return {
       kind: 'project-html',
@@ -16694,7 +16692,6 @@ function HtmlViewer({
       copyText: t('socialShare.projectCopyText', {
         title: exportTitle,
         url: socialShareDisplayUrl,
-        repo: OPEN_DESIGN_GITHUB_REPO_URL,
       }),
     };
   }, [exportTitle, locale, socialShareDisplayUrl, t]);

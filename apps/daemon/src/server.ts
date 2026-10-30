@@ -3375,7 +3375,7 @@ export async function startServer({
 
       res.setHeader('WWW-Authenticate', API_TOKEN_BASIC_CHALLENGE);
       return res.status(401).type('text/plain').send(
-        'OpenDesign authentication required. Use username "open-design" and OD_API_TOKEN as the password.',
+        'NexusDesign authentication required. Use username "open-design" and OD_API_TOKEN as the password.',
       );
     });
   }

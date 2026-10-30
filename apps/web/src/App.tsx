@@ -6289,7 +6289,7 @@ function AppInner() {
           an export inside a project stays on screen when the user navigates
           back to home. */}
       <ExperienceSurvey
-        metricsConsent={config.telemetry?.metrics === true}
+        metricsConsent={SHOW_UPSTREAM_LINKS && config.telemetry?.metrics === true}
         onExposure={() => trackExperienceSurveyShown(analytics.track)}
         onDismiss={() => trackExperienceSurveyDismissed(analytics.track)}
         onSubmit={(answers) => trackExperienceSurveySent(analytics.track, answers)}

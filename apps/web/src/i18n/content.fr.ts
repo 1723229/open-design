@@ -9,7 +9,7 @@ export const FR_SKILL_COPY: Record<string, { description?: string; examplePrompt
   },
   'agent-browser': {
     examplePrompt:
-      'Vérifiez la preview locale OpenDesign avec agent-browser : démarrez ou connectez Chrome CDP, ouvrez http://127.0.0.1:17573/, puis rapportez le titre, l’URL, le texte visible et enregistrez un screenshot.',
+      'Vérifiez la preview locale NexusDesign avec agent-browser : démarrez ou connectez Chrome CDP, ouvrez http://127.0.0.1:17573/, puis rapportez le titre, l’URL, le texte visible et enregistrez un screenshot.',
     description:
       'Automatisation navigateur pour valider la preview locale NexusDesign. Se connecte à un endpoint Chrome CDP vérifié, lit l’état rendu de la page, peut cliquer/saisir si nécessaire et enregistre un screenshot.',
   },

@@ -104,7 +104,7 @@ describe('i18n locales', () => {
     const zh = await loadDict('zh-CN');
     expect(zh['chat.runError.title.cliSessionRefused']).toBe('智能体版本不兼容');
     expect(zh['chat.runError.cliSessionRefusedMessage']).toBe(
-      'Open Design 暂不支持当前智能体版本，请更换为支持的版本后再试。',
+      'NexusDesign 暂不支持当前智能体版本，请更换为支持的版本后再试。',
     );
 
     // Product supplementary copy revision 96 has no interpolation slots. A locale with a

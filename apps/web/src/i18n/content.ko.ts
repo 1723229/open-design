@@ -21,7 +21,7 @@ export const KO_SKILL_COPY: Record<string, { description?: string; examplePrompt
   },
   'agent-browser': {
     description:
-      'AI 에이전트를 위한 브라우저 자동화 CLI. 사용자가 브라우저 동작을\n검사, 테스트 또는 자동화해야 할 때 사용하세요: 페이지 탐색, 양식 작성,\n버튼 클릭, 스크린샷 촬영, 페이지 데이터 추출, 선택된\nOpenDesign 브라우저 탭 컨텍스트 읽기, 웹 앱 테스트, NexusDesign\n미리보기 도그푸딩, QA, 버그 헌트, 또는 앱 품질 검토. 사용자가 명시적으로\n외부 브라우징을 요청하지 않는 한 로컬 NexusDesign 미리보기 URL을 우선하세요.',
+      'AI 에이전트를 위한 브라우저 자동화 CLI. 사용자가 브라우저 동작을\n검사, 테스트 또는 자동화해야 할 때 사용하세요: 페이지 탐색, 양식 작성,\n버튼 클릭, 스크린샷 촬영, 페이지 데이터 추출, 선택된\nNexusDesign 브라우저 탭 컨텍스트 읽기, 웹 앱 테스트, NexusDesign\n미리보기 도그푸딩, QA, 버그 헌트, 또는 앱 품질 검토. 사용자가 명시적으로\n외부 브라우징을 요청하지 않는 한 로컬 NexusDesign 미리보기 URL을 우선하세요.',
     examplePrompt:
       'AI 에이전트를 위한 브라우저 자동화 CLI.',
   },

@@ -129,18 +129,20 @@ describe('derivePluginSourceLinks · url + local + bundled sources', () => {
     expect(out.sourceKindLabel).toBe('Local');
   });
 
-  it('routes bundled official sources to the OpenDesign repo', () => {
+  it('shows bundled plugins with local branding and no upstream links', () => {
     const out = derivePluginSourceLinks(
       makeRecord({
         sourceKind: 'bundled',
         source:     'plugins/_official/scenarios/od-code-migration',
       }),
     );
-    expect(out.sourceUrl).toBe('https://github.com/nexu-io/open-design');
+    expect(out.sourceUrl).toBeNull();
     expect(out.sourceKindLabel).toBe('Official');
-    expect(out.sourceLabel).toBe('nexu-io/open-design');
-    expect(out.authorProfileUrl).toBe('https://github.com/nexu-io/open-design');
-    expect(out.homepageUrl).toBe('https://github.com/nexu-io/open-design');
+    expect(out.sourceLabel).toBe('NexusDesign');
+    expect(out.authorName).toBe('NexusDesign');
+    expect(out.authorAvatarUrl).toBe('/logo-mark.svg');
+    expect(out.authorProfileUrl).toBeNull();
+    expect(out.homepageUrl).toBeNull();
   });
 });
 
@@ -187,7 +189,7 @@ describe('derivePluginSourceLinks · author + contribute', () => {
     expect(out.authorAvatarUrl).toBeNull();
   });
 
-  it('falls back to homepage for the contribute link when source is not github', () => {
+  it('hides upstream contribution links for bundled plugins', () => {
     const out = derivePluginSourceLinks(
       makeRecord({
         sourceKind: 'bundled',
@@ -199,9 +201,9 @@ describe('derivePluginSourceLinks · author + contribute', () => {
         } as InstalledPluginRecord['manifest'],
       }),
     );
-    expect(out.contributeUrl).toBe('https://github.com/nexu-io/open-design/issues/new');
-    expect(out.contributeOnGithub).toBe(true);
-    expect(out.homepageUrl).toBe('https://github.com/nexu-io/open-design');
+    expect(out.contributeUrl).toBeNull();
+    expect(out.contributeOnGithub).toBe(false);
+    expect(out.homepageUrl).toBeNull();
   });
 
   it('drops malformed homepage values', () => {

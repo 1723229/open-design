@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { CompanyProvider, COMPANY_SESSION_CHANGED_EVENT } from '../../src/company/CompanyProvider';
 
 import { installErrorHandlers } from '../../src/analytics/error-tracking';
 import { MatrixLoader } from '../../src/components/MatrixLoader';
@@ -13,6 +14,12 @@ import { installChatScrollTakeover } from '../../src/runtime/chat-scroll-takeove
 // finishes `bootstrapExceptionTracking()` with the PostHog key, so even
 // errors thrown during the dynamic import of `src/App` are captured.
 installErrorHandlers();
+
+// Account transitions discard module caches, kept-alive previews, and pending
+// workspace reads before a different company identity enters the application.
+if (typeof window !== 'undefined') {
+  window.addEventListener(COMPANY_SESSION_CHANGED_EVENT, () => window.location.reload());
+}
 
 // Install the rest of the observability surface (long tasks, white-screen
 // detector, resource-error capture, boot timing, visibility tracking).
@@ -56,5 +63,5 @@ const App = dynamic(() => import('../../src/App').then((m) => m.App), {
 });
 
 export function ClientApp() {
-  return <App />;
+  return <CompanyProvider><App /></CompanyProvider>;
 }

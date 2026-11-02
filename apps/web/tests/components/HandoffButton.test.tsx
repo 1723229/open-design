@@ -8,11 +8,16 @@ import { HandoffButton } from '../../src/components/HandoffButton';
 import { I18nProvider, type Locale } from '../../src/i18n';
 import { readExpandedIndexCss } from '../helpers/read-expanded-css';
 
+const company = vi.hoisted(() => ({ enabled: false, isMember: false }));
+vi.mock('../../src/company/CompanyProvider', () => ({ useCompany: () => company }));
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   window.localStorage.clear();
+  company.enabled = false;
+  company.isMember = false;
 });
 
 function stubEditors(editors: HostEditor[], platform: HostEditorsResponse['platform'] = 'darwin') {
@@ -36,6 +41,17 @@ function renderLocalized(locale: Locale) {
 }
 
 describe('HandoffButton i18n', () => {
+  it.each(['admin', 'member'])('hides host desktop actions on a company server for %s', role => {
+    company.enabled = true;
+    company.isMember = role === 'member';
+    stubEditors([{ id: 'file-manager', label: 'File Manager', available: false }], 'linux');
+
+    renderLocalized('en');
+
+    expect(screen.queryByTestId('handoff-wrap')).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('keeps the header trigger as an icon-sized split control', () => {
     const css = readExpandedIndexCss();
 

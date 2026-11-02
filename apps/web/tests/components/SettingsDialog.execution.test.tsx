@@ -1362,11 +1362,11 @@ describe('SettingsDialog execution settings BYOK interactions', () => {
     expect(errorStatus?.parentElement).toHaveClass('settings-autosave-layer');
   });
 
-  it('keeps the Labs navigation without exposing the retired strategy switch', () => {
-    renderSettingsDialog();
-    fireEvent.click(screen.getByRole('button', { name: /Labs/i }));
+  it('hides Labs navigation and normalizes a legacy Labs deep link to General', () => {
+    renderSettingsDialog({}, { initialSection: 'labs' });
     expect(screen.queryByTestId('labs-harness-switch')).toBeNull();
-    expect(screen.getByRole('button', { name: /Labs/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Labs/i })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'General' })).toBeTruthy();
   });
 
   it('closes BYOK via the close button or backdrop', () => {
@@ -5085,88 +5085,30 @@ describe('SettingsDialog MCP server interactions', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the default Claude Code install snippet after fetching daemon install info', async () => {
-    renderSettingsDialog(
-      { mode: 'daemon', agentId: 'codex' },
-      { initialSection: 'integrations' },
-    );
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/mcp/install-info');
-    });
-    expect(screen.getByRole('heading', { name: /Connect OpenDesign to your coding agent/i })).toBeTruthy();
-    expect(screen.queryByText(/Run this command in your terminal/i)).toBeNull();
-    await waitFor(() => {
-      expect(screen.getByText(/claude mcp add-json --scope user open-design/i)).toBeTruthy();
-    });
-    expect(screen.getByText(/Keep OpenDesign running\. Restart your coding agent after setup\./i)).toBeTruthy();
-    expect(screen.getByText(/What your agent can do/i)).toBeTruthy();
+  it('normalizes the retired MCP server deep link without resolving install paths', async () => {
+    renderSettingsDialog({ mode: 'daemon', agentId: 'codex' }, { initialSection: 'integrations' });
+    expect(screen.getByRole('heading', { name: 'General' })).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/mcp/install-info')).toBe(false);
   });
 
-  it('switches client instructions and snippet content when a different MCP client is selected', async () => {
-    renderSettingsDialog(
-      { mode: 'daemon', agentId: 'codex' },
-      { initialSection: 'integrations' },
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText(/claude mcp add-json --scope user open-design/i)).toBeTruthy();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /Claude Code/i }));
-    fireEvent.click(screen.getByRole('option', { name: /Codex/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Append this table to ~\/\.codex\/config\.toml/i)).toBeTruthy();
-    });
-    expect(screen.getByText(/\[mcp_servers\.open-design\]/i)).toBeTruthy();
-
-    // Scope to the picker trigger ("Codex" + the TOML method chip) so
-    // we don't collide with the new one-click "Install in Codex" /
-    // "Remove from Codex" button on the same panel.
-    fireEvent.click(screen.getByRole('button', { name: /Codex.*TOML/i }));
-    fireEvent.click(screen.getByRole('option', { name: /Cursor/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Install in Cursor/i })).toBeTruthy();
-    });
-    expect(screen.getByText(/merge this JSON into ~\/\.cursor\/mcp\.json/i)).toBeTruthy();
-    expect(screen.getByText(/"mcpServers"/i)).toBeTruthy();
+  it('keeps retired MCP client setup choices out of the General page and navigation', () => {
+    renderSettingsDialog({ mode: 'daemon', agentId: 'codex' }, { initialSection: 'integrations' });
+    expect(screen.queryByRole('button', { name: /NexusDesign MCP/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Claude Code|Install in Cursor/i })).toBeNull();
+    expect(screen.queryByText(/mcp_servers\.open-design|claude mcp add-json/i)).toBeNull();
   });
 
-  it('copies the currently selected MCP snippet to the clipboard', async () => {
-    renderSettingsDialog(
-      { mode: 'daemon', agentId: 'codex' },
-      { initialSection: 'integrations' },
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText(/claude mcp add-json --scope user open-design/i)).toBeTruthy();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Copy setup command' }));
-
-    await waitFor(() => {
-      expect(writeTextMock).toHaveBeenCalledWith(
-        expect.stringContaining("claude mcp add-json --scope user open-design"),
-      );
-    });
-    expect(screen.getByText('Copied')).toBeTruthy();
+  it('does not expose or copy a retired MCP setup snippet from a legacy deep link', () => {
+    renderSettingsDialog({ mode: 'daemon', agentId: 'codex' }, { initialSection: 'integrations' });
+    expect(screen.queryByRole('button', { name: 'Copy setup command' })).toBeNull();
+    expect(writeTextMock).not.toHaveBeenCalled();
   });
 
-  it('shows a daemon error state when install paths cannot be resolved', async () => {
+  it('keeps a legacy MCP deep link usable when daemon install paths are unavailable', () => {
     fetchMock.mockRejectedValueOnce(new Error('network down'));
-
-    renderSettingsDialog(
-      { mode: 'daemon', agentId: 'codex' },
-      { initialSection: 'integrations' },
-    );
-
-    await waitFor(() => {
-      const errorCard = document.querySelector('.empty-card');
-      expect(errorCard?.textContent).toContain('reach the local daemon to resolve install paths');
-    });
-    expect(screen.getByText(/# resolving paths failed, see the error above/i)).toBeTruthy();
+    renderSettingsDialog({ mode: 'daemon', agentId: 'codex' }, { initialSection: 'integrations' });
+    expect(screen.getByRole('heading', { name: 'General' })).toBeTruthy();
+    expect(screen.queryByText(/resolving paths failed/i)).toBeNull();
   });
 });
 

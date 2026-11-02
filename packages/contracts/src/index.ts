@@ -121,3 +121,5 @@ export * from './runtime/comment-identity.js';
 export * from './runtime/comment-identity-helpers.js';
 export * from './runtime/comment-identity-selector.js';
 export * from './api/commentPreparation.js';
+export * from './api/company.js';
+export * from './api/company-models.js';

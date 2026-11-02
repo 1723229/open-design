@@ -1,0 +1,82 @@
+name: nexus-design
+
+services:
+  api:
+    image: nexus-design:${NEXUS_VERSION:-local}
+    container_name: nexus-design
+    build:
+      context: ../..
+      dockerfile: deploy/company/Dockerfile
+      target: api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=2048
+      OD_COMPANY_MODE: "1"
+      OD_COMPANY_MAX_JOBS: ${NEXUS_MAX_JOBS:-12}
+      OD_COMPANY_MAX_JOBS_PER_USER: ${NEXUS_MAX_JOBS_PER_USER:-3}
+      OD_DISABLE_API_AUTH: "1"
+      NEXUS_LDAP_BIND_PASSWORD: ${NEXUS_LDAP_BIND_PASSWORD:?set LDAP service password}
+      OD_BIND_HOST: 0.0.0.0
+      OD_PORT: "7456"
+      OD_CODEX_SANDBOX: danger-full-access
+      OD_DATA_DIR: ${NEXUS_DATA_ROOT:?set absolute NEXUS_DATA_ROOT}
+      OD_COMPANY_EXECUTOR_URL: http://executor:7457
+      OD_COMPANY_EXECUTOR_SECRET: ${NEXUS_EXECUTOR_SECRET:?set NEXUS_EXECUTOR_SECRET}
+      OD_COMPANY_PROXY_URL: http://api:7458
+      OD_COMPANY_PROXY_PORT: "7458"
+      OD_COMPANY_PROXY_CONTROL_SECRET: ${NEXUS_PROXY_SECRET:?set NEXUS_PROXY_SECRET}
+    ports:
+      - "${NEXUS_BIND_HOST:-0.0.0.0}:7456:7456"
+    volumes:
+      - ${NEXUS_DATA_ROOT}:${NEXUS_DATA_ROOT}
+    networks: [control, jobs, egress]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    pids_limit: ${NEXUS_API_PIDS_LIMIT:-1024}
+    depends_on: [executor]
+
+  executor:
+    image: nexus-design-executor:${NEXUS_VERSION:-local}
+    container_name: nexus-design-executor
+    build:
+      context: ../..
+      dockerfile: deploy/company/Dockerfile
+      target: executor
+    command: [node, apps/daemon/dist/company/executor-main.js]
+    restart: unless-stopped
+    environment:
+      OD_DATA_DIR: ${NEXUS_DATA_ROOT}
+      OD_COMPANY_EXECUTOR_SECRET: ${NEXUS_EXECUTOR_SECRET}
+      OD_COMPANY_JOB_IMAGE: nexus-design-agent:${NEXUS_VERSION:-local}
+      OD_COMPANY_JOB_NETWORK: nexus-design-jobs
+      OD_COMPANY_PROXY_URL: http://api:7458
+      OD_COMPANY_EXECUTOR_PORT: "7457"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${NEXUS_DATA_ROOT}:${NEXUS_DATA_ROOT}
+    group_add: ["${NEXUS_DOCKER_GID:-999}"]
+    networks: [control]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    pids_limit: 256
+
+  agent-image:
+    image: nexus-design-agent:${NEXUS_VERSION:-local}
+    build:
+      context: ../..
+      dockerfile: deploy/company/Dockerfile
+      target: agent
+    profiles: [build]
+
+networks:
+  control:
+    internal: true
+  jobs:
+    name: nexus-design-jobs
+    internal: true
+  egress: {}

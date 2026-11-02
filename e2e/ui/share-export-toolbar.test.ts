@@ -8,6 +8,48 @@ import { AMR_PERSONAL_WORKSPACE_CONTEXT, mockAmrPersonalWorkspace } from '@/play
 // native toolbar also contains 28/6. Do not apply this geometry globally.
 test.use({ viewport: { width: 1440, height: 904 }, deviceScaleFactor: 1 });
 
+test('[P1] browser PDF export downloads without a print popup or animation-frame starvation', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('open-design:locale', 'en'));
+  await mockAmrPersonalWorkspace(page);
+  const projectId = `browser-pdf-${randomUUID()}`;
+  await page.route('**/api/projects/*/workspace-scope', route => route.fulfill({ json: { scope: {
+    kind: 'personal', projectId, workspaceId: AMR_PERSONAL_WORKSPACE_CONTEXT.workspaceId,
+    visibility: 'personal', context: AMR_PERSONAL_WORKSPACE_CONTEXT,
+  } } }));
+  const created = await page.request.post('/api/projects', { data: { id: projectId, name: 'Browser PDF export', metadata: { kind: 'prototype', nameSource: 'user' } } });
+  expect(created.ok(), await created.text()).toBeTruthy();
+  try {
+    const uploaded = await page.request.post(`/api/projects/${projectId}/files`, { data: {
+      name: 'index.html', content: '<!doctype html><html><body style="background:white;color:#17434b;padding:48px"><h1>Browser PDF export</h1><p>A rendered page must be downloaded without opening a print window.</p></body></html>',
+      artifactManifest: { version: 1, kind: 'html', title: 'Browser PDF export', entry: 'index.html', renderer: 'html', exports: ['html'] },
+    } });
+    expect(uploaded.ok(), await uploaded.text()).toBeTruthy();
+    await page.goto(`/projects/${projectId}/files/index.html`);
+    const toolbar = page.locator('.ws-tabs-file-actions');
+    await expect(toolbar.getByRole('button', { name: 'Export', exact: true })).toBeEnabled({ timeout: T.long });
+    let popups = 0;
+    let dialogs = 0;
+    page.on('popup', () => popups++);
+    page.on('dialog', async dialog => { dialogs++; await dialog.dismiss(); });
+    await toolbar.getByRole('button', { name: 'Export', exact: true }).click();
+    const downloaded = page.waitForEvent('download', { timeout: T.xlong });
+    await page.getByRole('menuitem', { name: /PDF/ }).click();
+    const download = await downloaded;
+    expect(download.suggestedFilename()).toMatch(/\.pdf$/i);
+    const stream = await download.createReadStream();
+    if (!stream) throw new Error('The PDF download did not provide its bytes');
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+    const bytes = Buffer.concat(chunks);
+    expect(bytes.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+    expect(bytes.toString('latin1')).toContain('/Subtype /Image');
+    expect(popups).toBe(0);
+    expect(dialogs).toBe(0);
+  } finally {
+    await page.request.delete(`/api/projects/${projectId}`);
+  }
+});
+
 for (const theme of ['light', 'dark', 'system-light', 'system-dark'] as const) {
   test(`[P1] OPEND-3580 Owner toolbar hierarchy and B menu intents · ${theme}`, async ({ page }, testInfo) => {
     await page.emulateMedia({ colorScheme: theme.endsWith('dark') ? 'dark' : 'light' });

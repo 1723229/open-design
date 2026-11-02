@@ -30,6 +30,10 @@ import { createAuthorizeProjectRequest } from '../src/collab/project-request-aut
 import { resolveOptionalLocalWorkspaceRequestAuthority } from '../src/collab/workspace-resource-mutation.js';
 import { createEnforceWorkspaceProjectMutation } from '../src/routes/project/index.js';
 import { workspaceContextFromDirectoryItem } from '../src/collab/vela-workspace-context.js';
+import { createCompanyModelAdmissionHolds, installCompanyHttpPolicy } from '../src/company/http-policy.js';
+import { CompanyModelSettings, COMPANY_MODEL_AGENTS } from '../src/company/model-settings.js';
+import { CompanyJobQueue } from '../src/company/job-queue.js';
+import type { CompanyModelRoute } from '@open-design/contracts';
 import { registerRunRoutes } from '../src/routes/runs.js';
 import { connectorService } from '../src/connectors/service.js';
 import { upsertInstalledPlugin } from '../src/plugins/registry.js';
@@ -242,6 +246,9 @@ async function startServer(opts?: {
   seedImplicitScenarioPlugin?: boolean;
   teamProjectResourceState?: 'active' | 'deleted';
   loadPluginRegistryView?: () => Promise<any>;
+  installPolicy?: (app: express.Express) => void;
+  chat?: Record<string, unknown>;
+  authorizeProjectRequest?: (...args: any[]) => Promise<boolean>;
 }) {
   createdRunCount = 0;
   lastCreatedRun = null;
@@ -326,6 +333,7 @@ async function startServer(opts?: {
 
   const app = express();
   app.use(express.json());
+  opts?.installPolicy?.(app);
   runsServiceStub = createRunsServiceStub();
   registerRunRoutes(app, {
     db,
@@ -343,7 +351,7 @@ async function startServer(opts?: {
       detectAgents: async () => [],
       getAgentDef: () => null,
     },
-    chat: { startChatRun: async () => undefined },
+    chat: { startChatRun: async () => undefined, ...opts?.chat },
     byokCredentials: { has: async (profileId: string) => profileId === 'test-profile' },
     lifecycle: { isDaemonShuttingDown: () => false },
     plugins: {
@@ -412,7 +420,7 @@ async function startServer(opts?: {
     amrWorkspaceScope: {
       isSignedIn: opts?.isAmrSignedIn ?? (() => false),
     },
-    authorizeProjectRequest: createAuthorizeProjectRequest({
+    authorizeProjectRequest: opts?.authorizeProjectRequest ?? createAuthorizeProjectRequest({
       db,
       getWorkspaceProject: (dbArg: unknown, workspaceId: string, projectId: string) =>
         getWorkspaceProject(
@@ -442,6 +450,92 @@ async function startServer(opts?: {
   const port = typeof address === 'object' && address ? address.port : 0;
   return `http://127.0.0.1:${port}`;
 }
+
+describe('company model admission lifetime', () => {
+  function deferred() {
+    let resolve!: () => void;
+    const promise = new Promise<void>(r => { resolve = r; });
+    return { promise, resolve };
+  }
+  async function setup(outcome: 'success' | 'validation' | 'failure', pause = false) {
+    const admissions = createCompanyModelAdmissionHolds(); const held = admissions.routes;
+    const entered = deferred(); const resume = deferred(); const settled = deferred(); const closed = deferred();
+    let models!: CompanyModelSettings; let queue!: CompanyJobQueue;
+    const base = await startServer({
+      installPolicy(app) {
+        queue = new CompanyJobQueue(openDatabase(tempDir!));
+        models = new CompanyModelSettings(tempDir!, {
+          legacy: { agentId: 'codex', agentModels: { codex: { model: 'old' } }, agentCliEnv: { codex: { OPENAI_API_KEY: 'original', OPENAI_BASE_URL: 'https://old.example/v1' } } },
+          retainedRoutes: () => [...held.values(), ...queue.list().filter(j => j.state === 'queued' || j.state === 'running').map(j => (j.payload.meta as { companyModelRoute: CompanyModelRoute }).companyModelRoute)],
+          fetchImpl: async (_url, init) => {
+            const body = JSON.parse(String(init?.body));
+            const data = 'input' in body ? [{ type: 'response.output_item.done', item: { type: 'function_call', name: 'nexus_probe', arguments: '{}' } }, { type: 'response.completed' }] : [];
+            return new Response(data.map(d => `data: ${JSON.stringify(d)}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } });
+          },
+        });
+        installCompanyHttpPolicy(app, {
+          company: { enabled: true, getUser: () => ({ id: 'admin', username: 'admin', role: 'admin', mustChangePassword: false, source: 'local', disabled: false }) },
+          readConfig: async () => ({}), detectAgents: async () => [], models,
+          holdModelRoute(req, res, route) {
+            admissions.holdModelRoute(req, res, route);
+            res.once('close', closed.resolve);
+          },
+        });
+      },
+      authorizeProjectRequest: async () => {
+        entered.resolve(); if (pause) await resume.promise;
+        if (outcome === 'failure') throw new Error('preparation failed');
+        return true;
+      },
+      chat: {
+        onRunAdmissionSettled(req: express.Request) { admissions.settleModelRoute(req); settled.resolve(); },
+        dispatchCompanyRun: async (_req: unknown, meta: any, run: any) => queue.enqueue({ userId: 'admin', projectId: TEAM_PROJECT, clientRequestId: run.id, payload: { meta, runId: run.id } }),
+      },
+    });
+    const body = { projectId: TEAM_PROJECT, message: 'generate', ...(outcome === 'validation' ? { submission: { invalid: true } } : {}) };
+    const replace = async () => {
+      const providerId = models.pinActive().providerId;
+      let view = models.saveProvider({ expectedRevision: models.view().revision, id: providerId, name: 'New', baseUrl: 'https://new.example/v1', apiKey: 'replacement', models: ['new'] });
+      view = await models.testProvider({ expectedRevision: view.revision, providerId, model: 'new' });
+      models.activate({ expectedRevision: view.revision, providerId, model: 'new', agentId: 'codex' }, COMPANY_MODEL_AGENTS.map(a => ({ ...a, installed: true })));
+    };
+    return { base, body, held, models, queue, entered, resume, settled, closed, replace };
+  }
+  it.each(['/api/runs', '/api/chat'])('releases successful admission through %s after durable enqueue', async route => {
+    const t = await setup('success');
+    const response = await fetch(`${t.base}${route}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(t.body) });
+    expect(response.status).toBe(202); expect(t.queue.list()).toHaveLength(1); expect(t.held.size).toBe(0);
+  });
+  it.each(['/api/runs', '/api/chat'])('releases early validation failure through %s', async route => {
+    const t = await setup('validation');
+    const response = await fetch(`${t.base}${route}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(t.body) });
+    expect(response.status).toBe(400); expect(t.queue.list()).toHaveLength(0); expect(t.held.size).toBe(0);
+  });
+  it.each(['/api/runs', '/api/chat'])('releases preparation errors through %s', async route => {
+    const t = await setup('failure');
+    const response = await fetch(`${t.base}${route}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(t.body) });
+    expect(response.status).toBe(500); expect(t.queue.list()).toHaveLength(0); expect(t.held.size).toBe(0);
+  });
+  it.each(['/api/runs', '/api/chat'])('retains a disconnected pending route through %s until success or failure settles', async route => {
+    for (const outcome of ['success', 'failure'] as const) {
+      const t = await setup(outcome, true); const original = t.models.pinActive();
+      const request = http.request(`${t.base}${route}`, { method: 'POST', headers: { 'content-type': 'application/json' } });
+      request.on('error', () => {}); request.end(JSON.stringify(t.body));
+      await t.entered.promise; request.destroy(); await t.closed.promise;
+      expect(t.held.size).toBe(1);
+      await t.replace(); expect(t.models.resolve(original).apiKey).toBe('original');
+      t.resume.resolve(); await t.settled.promise;
+      expect(t.held.size).toBe(0);
+      const jobs = t.queue.list(); expect(jobs).toHaveLength(outcome === 'success' ? 1 : 0);
+      if (outcome === 'success') expect((jobs[0]!.payload.meta as { companyModelRoute: CompanyModelRoute }).companyModelRoute).toEqual(original);
+      t.models.saveProvider({ expectedRevision: t.models.view().revision, name: 'Other', baseUrl: 'https://other.example/v1', apiKey: 'other', models: ['other'] });
+      if (outcome === 'success') expect(t.models.resolve(original).apiKey).toBe('original');
+      else expect(() => t.models.resolve(original)).toThrow();
+      await new Promise<void>(resolve => server!.close(() => resolve())); server = null;
+      closeDatabase(); fs.rmSync(tempDir!, { recursive: true, force: true }); tempDir = null;
+    }
+  });
+});
 
 describe('POST /api/runs — workspace mutation gate', () => {
   it.each(['/api/runs', '/api/chat'])(

@@ -90,6 +90,8 @@ import type { SharedProjectPredicate } from '../collab/all-projects-list';
 import { acknowledgeProjectCompletion, useProjectRunStatuses } from '../hooks/useProjectRunStatuses';
 import { MessageCenter } from './MessageCenter';
 import type { EntrySettingsSection } from './EntrySettingsMenu';
+import { CompanyAccountMenu } from '../company/CompanyControls';
+import { useCompany } from '../company/CompanyProvider';
 import type { Project } from '../types';
 import { isRtlLocale, useI18n } from '../i18n';
 import { communityForLocale } from '../lib/community-links';
@@ -1042,6 +1044,7 @@ export function EntryTopRightCluster({
   workspaceQuotaStatus,
   priorityAnnouncementMetricsConsent,
 }: EntryTopRightClusterProps) {
+  const company = useCompany();
   const { t, locale } = useI18n();
   const analytics = useAnalytics();
   const workspaceDimensions = workspaceAnalyticsDimensions(context);
@@ -1362,6 +1365,10 @@ export function EntryTopRightCluster({
   }
 
   if (typeof document === 'undefined' || !chromeActionsHost) return null;
+  if (company.enabled) return createPortal(
+    <div className="entry-top-right-cluster"><CompanyAccountMenu /></div>,
+    chromeActionsHost,
+  );
   if (!leadingSlot && !inviteSlot && !context && !updaterSlot) return null;
 
   // With a rail host the account module — and the update-ready rocket that

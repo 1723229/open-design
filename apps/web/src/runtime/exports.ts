@@ -1849,7 +1849,9 @@ async function captureArtifactSlides(
   iframe.setAttribute('sandbox', 'allow-scripts');
   iframe.setAttribute('aria-hidden', 'true');
   iframe.setAttribute('tabindex', '-1');
-  iframe.style.cssText = `position:fixed;left:-100000px;top:0;width:${width}px;height:${height}px;border:0;background:#fff;`;
+  // Opaque-origin iframes outside the viewport can have animation frames
+  // suspended. Keep the capture document renderable without covering the UI.
+  iframe.style.cssText = `position:fixed;left:0;top:0;width:${width}px;height:${height}px;border:0;background:#fff;opacity:0.001;pointer-events:none;z-index:-1;`;
   iframe.srcdoc = buildSrcdoc(html, { deck: opts.deck });
   document.body.appendChild(iframe);
 

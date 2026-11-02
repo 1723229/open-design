@@ -1,3 +1,4 @@
+import { useCompany } from '../company/CompanyProvider';
 // Hand-off menu in the ChatPane header. The left split button opens the
 // current design project folder in a local editor, while the dropdown also
 // exposes copy-to-CLI prompts for handing the same local folder to code agents.
@@ -332,7 +333,12 @@ ${labels.projectId}: ${projectId}
 `;
 }
 
-export function HandoffButton({
+export function HandoffButton(props: Props) {
+  const company = useCompany();
+  return company.enabled ? null : <HostHandoffButton {...props} />;
+}
+
+function HostHandoffButton({
   projectId,
   projectKind,
   projectName,

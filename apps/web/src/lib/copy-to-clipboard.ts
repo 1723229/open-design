@@ -19,14 +19,16 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     ta.value = text;
     ta.style.position = 'fixed';
     ta.style.opacity = '0';
-    document.body.appendChild(ta);
+    // Keep the selection inside a modal's focus boundary on HTTP origins.
+    const copyRoot = priorFocus?.closest('dialog, [role="dialog"]') ?? document.body;
+    copyRoot.appendChild(ta);
     ta.select();
     try {
       return document.execCommand('copy');
     } catch {
       return false;
     } finally {
-      document.body.removeChild(ta);
+      ta.remove();
       if (priorFocus?.isConnected) {
         try {
           priorFocus.focus({ preventScroll: true });

@@ -10,6 +10,28 @@ afterEach(() => {
 });
 
 describe('copyToClipboard', () => {
+  it('keeps an HTTP fallback copy target inside the active dialog', async () => {
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    const button = document.createElement('button');
+    dialog.appendChild(button);
+    document.body.appendChild(dialog);
+    button.focus();
+    // A modal's focus guard prevents selecting a copy target outside its panel.
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: vi.fn(() => dialog.querySelector('textarea')?.value === 'share link'),
+    });
+    try {
+      expect(await copyToClipboard('share link')).toBe(true);
+      expect(document.activeElement).toBe(button);
+      expect(dialog.querySelector('textarea')).toBeNull();
+    } finally {
+      dialog.remove();
+      Reflect.deleteProperty(document, 'execCommand');
+    }
+  });
+
   it('calls navigator.clipboard.writeText once and returns true on the canonical path', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {

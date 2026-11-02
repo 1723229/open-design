@@ -97,7 +97,7 @@ export interface ProjectPreviewScopeDeps {
   mint: (
     projectId: string,
     workspace?: { workspaceId: string; workspaceMemberId: string } | null,
-    options?: { readonly ttlMs?: number },
+    options?: { readonly ttlMs?: number; readonly ownerKey?: string },
   ) => string;
   /**
    * Like `mint`, but reuses the live scope for this exact (project, workspace)
@@ -113,7 +113,7 @@ export interface ProjectPreviewScopeDeps {
   acquire: (
     projectId: string,
     workspace?: { workspaceId: string; workspaceMemberId: string } | null,
-    options?: { readonly ttlMs?: number },
+    options?: { readonly ttlMs?: number; readonly ownerKey?: string },
   ) => string;
   revoke: (scope: string) => void;
   expiresAt: (projectId: string, scope: string) => number | undefined;
@@ -127,7 +127,7 @@ export interface ProjectPreviewScopeDeps {
   renew: (
     projectId: string,
     scope: string,
-    options?: { readonly ttlMs?: number },
+    options?: { readonly ttlMs?: number; readonly ownerKey?: string },
   ) => number | undefined;
   validate: (projectId: string, scope: string) => boolean;
   resolve: (

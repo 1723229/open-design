@@ -1,3 +1,4 @@
+import { useCompany } from '../company/CompanyProvider';
 import { SHOW_OFFICIAL_CLOUD } from '../product';
 import { useRegistrationInvite } from './useRegistrationInvite';
 // EntryShell — the centered-hero entry layout.
@@ -221,7 +222,7 @@ import {
   API_PROTOCOL_TABS,
   SUGGESTED_MODELS_BY_PROTOCOL,
 } from '../state/apiProtocols';
-import { defaultKnownProviderModel, KNOWN_PROVIDERS } from '../state/config';
+import { defaultKnownProviderModel, isStoredMediaProviderEntryPresent, KNOWN_PROVIDERS } from '../state/config';
 import type { KnownProvider } from '../state/config';
 import { testAgent, testApiProvider } from '../providers/connection-test';
 import { fetchProviderModels } from '../providers/provider-models';
@@ -702,6 +703,7 @@ export function EntryShell({
   onSignedOut,
   onAmrLoginStatusChange,
 }: Props) {
+  const company = useCompany();
   const { t } = useI18n();
   // Each entry sub-view (home / projects / design-systems) is its own
   // URL now, so the browser back/forward buttons work and a deep link
@@ -2075,7 +2077,7 @@ export function EntryShell({
   }, [registrationSkipNotice, registrationInvite, view, workspaceContextState.loading, workspaceContextState.identityChangePending, amrAccountId, amrRegistrationStatus, railWorkspaceContext]);
   if (registrationInvite) return registrationInvite;
 
-  if (view === 'onboarding') {
+  if (view === 'onboarding' && !company.enabled) {
     return (
       <div className="entry-shell entry-shell--no-header entry-shell--onboarding">
         <main className="entry-onboarding-modal" aria-label={t('settings.welcomeTitle')}>
@@ -2126,6 +2128,7 @@ export function EntryShell({
   // projects down a second path would drift from Home's the first time either
   // changed.
   const homeViewProps = {
+    aihubmixConfigured: isStoredMediaProviderEntryPresent(config.mediaProviders?.aihubmix),
     projects: homeProjectsList,
     projectsLoading,
     designSystems,

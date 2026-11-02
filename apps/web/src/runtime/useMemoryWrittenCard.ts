@@ -24,6 +24,7 @@
 // the conversation and comes back on reload.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCompany } from '../company/CompanyProvider';
 import type {
   MemoryEntrySummary,
   MemoryExtractionRecord,
@@ -137,10 +138,12 @@ function snapshotOrigin(origin: MemoryWrittenTurnOrigin | undefined): MemoryWrit
 }
 
 export function useMemoryWrittenCard<Context = undefined>(
-  runActive: boolean,
+  observedRunActive: boolean,
   context?: Context,
   origin?: MemoryWrittenTurnOrigin,
 ): UseMemoryWrittenCard<Context> {
+  const company = useCompany();
+  const runActive = observedRunActive && !company.enabled;
   type Batch = NonNullable<UseMemoryWrittenCard<Context>['batch']>;
   type Window = {
     context: Context | undefined;

@@ -1,3 +1,4 @@
+import { useCompany } from '../company/CompanyProvider';
 import { SHOW_UPSTREAM_LINKS } from '../product';
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -72,7 +73,12 @@ type CardModel = {
 // `active` reports whether Home is the active entry view. EntryShell keeps
 // every entry view mounted, so the dialog gates its fetch/show decision and its
 // `page_name: 'home'` analytics on this flag instead of on mount alone.
-export function WhatsNewPopup({ active }: { active: boolean }) {
+export function WhatsNewPopup(props: { active: boolean }) {
+  const company = useCompany();
+  return company.isMember ? null : <LocalWhatsNewPopup {...props} />;
+}
+
+function LocalWhatsNewPopup({ active }: { active: boolean }) {
   const { t, locale } = useI18n();
   const analytics = useAnalytics();
   const hookAppVersion = useAppVersion();

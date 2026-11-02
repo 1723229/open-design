@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { Dirent } from 'node:fs';
+import { realpathSync, lstatSync, type Dirent } from 'node:fs';
 import { appendFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -45,6 +45,18 @@ function resolveInside(parentDir: string, relativePath: string, escapeMessage: s
   if (!isPathInside(parentDir, targetPath)) {
     throw new Error(escapeMessage);
   }
+  const canonical = (candidate: string): string => {
+    try { return realpathSync(candidate); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      try { if (lstatSync(candidate).isSymbolicLink()) throw new Error(escapeMessage); }
+      catch (entryError) { if ((entryError as NodeJS.ErrnoException).code !== 'ENOENT') throw entryError; }
+      const parent = path.dirname(candidate);
+      if (parent === candidate) throw error;
+      return path.join(canonical(parent),path.basename(candidate));
+    }
+  };
+  if (!isPathInside(canonical(parentDir),canonical(targetPath))) throw new Error(escapeMessage);
   return targetPath;
 }
 

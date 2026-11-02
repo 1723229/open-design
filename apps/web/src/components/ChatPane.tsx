@@ -1,3 +1,4 @@
+import { useCompany } from '../company/CompanyProvider';
 import { SHOW_OFFICIAL_CLOUD, SHOW_UPSTREAM_LINKS } from '../product';
 import { withTaskPresentation, newerTaskDisplay, type PresentedChatMessage } from '../runtime/chat/task-presentation';
 import { reportExperienceEvent } from '../observability/experience-diagnostics';
@@ -1495,6 +1496,7 @@ export function ChatPane({
   config,
 }: Props) {
   const { workspaceContext } = useProjectCollabContext();
+  const company = useCompany();
   const { t, locale } = useI18n();
   const analytics = useAnalytics();
   const previousTaskPresentation = useRef<PresentedChatMessage[]>([]);
@@ -1572,7 +1574,7 @@ export function ChatPane({
    */
   const watchedLiveMediaRunsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!projectId || !trackedMediaRunKey) {
+    if (company.isMember || !projectId || !trackedMediaRunKey) {
       setProjectMediaTasks([]);
       return;
     }
@@ -1645,7 +1647,7 @@ export function ChatPane({
       canceled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [liveMediaRun, projectId, trackedMediaRunKey, workspaceContext]);
+  }, [company.isMember, liveMediaRun, projectId, trackedMediaRunKey, workspaceContext]);
   const mediaTasksByRunId = useMemo(() => {
     const grouped = new Map<string, ProjectMediaTask[]>();
     for (const task of projectMediaTasks) {
@@ -1716,10 +1718,11 @@ export function ChatPane({
   const wheelWitnessFrameRef = useRef<number | null>(null);
   const scrolledToFormRef = useRef<Set<string>>(new Set());
   const refreshInlineAmrLoginStatus = useCallback(async (options: { refresh?: boolean } = {}) => {
+    if (company.enabled) return null;
     const next = await fetchVelaLoginStatus(options).catch(() => null);
     if (next) setInlineAmrLoginStatus(next);
     return next;
-  }, []);
+  }, [company.enabled]);
 
   useEffect(() => {
     void refreshInlineAmrLoginStatus();

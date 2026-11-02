@@ -1,3 +1,4 @@
+import { useCompany } from '../company/CompanyProvider';
 import {
   useCallback,
   useEffect,
@@ -323,14 +324,17 @@ export function EntryView({
   onSignedOut,
   onAmrLoginStatusChange,
 }: Props) {
+  const company = useCompany();
   const [connectors, setConnectors] = useState<ConnectorDetail[]>([]);
   const [connectorsLoading, setConnectorsLoading] = useState(false);
 
   const reloadConnectorCatalog = useCallback(async (options: { refreshDiscovery?: boolean } = {}) => {
+    if (company.isMember) return;
     setConnectors(await fetchConnectorCatalogSnapshot(options));
   }, []);
 
   useEffect(() => {
+    if (company.isMember) return;
     let cancelled = false;
     // Fetch connectors on mount so the New project modal can show
     // already-configured connectors without waiting for the user to

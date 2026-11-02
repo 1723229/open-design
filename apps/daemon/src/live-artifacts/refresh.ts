@@ -48,6 +48,7 @@ export type LocalDaemonRefreshToolName =
   | 'public_github_repository_metric';
 
 export interface ExecuteLocalDaemonRefreshSourceOptions {
+  allowSource?: (source: LiveArtifactSource) => boolean;
   projectsRoot: string;
   projectId: string;
   source: LiveArtifactSource;
@@ -704,6 +705,7 @@ async function executePublicGithubRepositoryMetric(options: ExecuteLocalDaemonRe
 }
 
 export async function executeLocalDaemonRefreshSource(options: ExecuteLocalDaemonRefreshSourceOptions): Promise<BoundedJsonObject> {
+  if (options.allowSource && !options.allowSource(options.source)) throw new Error('This refresh source is not available');
   if (options.source.type === 'local_file') {
     const toolName = options.source.toolName ?? 'project_files.read_json';
     if (toolName !== 'project_files.read_json') {

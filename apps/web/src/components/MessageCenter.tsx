@@ -1,3 +1,4 @@
+import { useCompany } from '../company/CompanyProvider';
 import { Button } from '@open-design/components';
 import { useCallback, useEffect, useId, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
@@ -64,7 +65,12 @@ interface Props {
 
 type SyncState = 'loading' | 'ready' | 'error';
 
-export function MessageCenter({
+export function MessageCenter(props: Props) {
+  const company = useCompany();
+  return company.enabled ? null : <CloudMessageCenter {...props} />;
+}
+
+function CloudMessageCenter({
   workspaceId,
   hideTrigger = false,
   returnFocusRef,

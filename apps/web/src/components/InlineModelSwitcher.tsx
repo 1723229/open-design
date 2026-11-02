@@ -1,3 +1,4 @@
+import { useCompany } from '../company/CompanyProvider';
 // InlineModelSwitcher — top-bar chip exposing CLI/BYOK + model picker.
 //
 // Lives in the entry view's sticky top-bar so users can swap between a
@@ -175,7 +176,12 @@ function displayAgentChipName(agent: Pick<AgentInfo, 'id' | 'name'>): string {
   return agent.id === 'amr' ? 'NexusDesign' : displayAgentName(agent);
 }
 
-export function InlineModelSwitcher({
+export function InlineModelSwitcher(props: Props) {
+  const company = useCompany();
+  return company.enabled ? null : <ConfiguredInlineModelSwitcher {...props} />;
+}
+
+function ConfiguredInlineModelSwitcher({
   config,
   agents,
   providerModelsCache,

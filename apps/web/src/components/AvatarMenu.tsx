@@ -1,3 +1,6 @@
+import { useCompany } from '../company/CompanyProvider';
+import { Button } from '@open-design/components';
+import { Icon } from './Icon';
 import { SHOW_OFFICIAL_CLOUD } from '../product';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
@@ -92,7 +95,17 @@ interface Props {
  * provider setup) lives in Settings → Execution; this popover keeps the
  * active agent's model and reasoning choices close to the composer.
  */
-export function AvatarMenu({
+export function AvatarMenu(props: Props) {
+  const company = useCompany();
+  return company.enabled ? company.isMember ? null : <CompanyModelSettingsShortcut onOpenSettings={props.onOpenSettings} /> : <ConfiguredAvatarMenu {...props} />;
+}
+
+function CompanyModelSettingsShortcut({ onOpenSettings }: Pick<Props, 'onOpenSettings'>) {
+  const t = useT();
+  return <Button variant="ghost" aria-label={t('settings.title')} title={t('settings.title')} onClick={() => onOpenSettings('execution')}><Icon name="settings" size={16} /></Button>;
+}
+
+function ConfiguredAvatarMenu({
   config,
   agents,
   onAgentChange,

@@ -1,5 +1,6 @@
 'use client';
 
+import { useCompany } from '../company/CompanyProvider';
 import {
   forwardRef,
   useCallback,
@@ -658,6 +659,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     },
     ref
   ) {
+    const company = useCompany();
     const { locale, t } = useI18n();
     const analytics = useAnalytics();
     const { workspaceContext } = useProjectCollabContext();
@@ -953,6 +955,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     const petEnabled = Boolean(onAdoptPet && onTogglePet);
     const [recentDirs, setRecentDirs] = useState<string[]>([]);
     useEffect(() => {
+      if (company.isMember) return;
       let cancelled = false;
       void fetchRecentLinkedDirs().then((dirs) => {
         if (!cancelled) setRecentDirs(dirs);
@@ -1175,6 +1178,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     // background poll would be cheap but unnecessary for the typical
     // edit-once-then-chat workflow.
     useEffect(() => {
+      if (company.isMember) return;
       if (!composerEngaged) return;
       let cancelled = false;
       void (async () => {
@@ -1207,6 +1211,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     }, [projectId, composerEngaged]);
 
     useEffect(() => {
+      if (company.isMember) return;
       if (!composerEngaged) return;
       let cancelled = false;
       void fetchConnectorCatalogSnapshot().then((rows) => {
@@ -1219,6 +1224,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     }, [composerEngaged]);
 
     useEffect(() => {
+      if (company.isMember) return;
       if (!composerEngaged) return;
       let cancelled = false;
       async function refreshConnectors() {

@@ -1,4 +1,5 @@
 import { SHOW_OFFICIAL_CLOUD, SHOW_UPSTREAM_LINKS } from './product';
+import { useCompany } from './company/CompanyProvider';
 import { WorkspaceRemovalBoundary } from './components/WorkspaceRemovalBoundary';
 import { homeAutoSendIdentity, type HomeRequestConcurrencyRejection } from './runtime/home-auto-send-identity';
 import { AmrConcurrencyDialog } from './components/AmrConcurrencyDialog';
@@ -186,10 +187,10 @@ import {
   loadConfig,
   mergeDaemonConfig,
   mergeDaemonMediaProviders,
-  saveConfig,
+  saveConfig as saveLocalConfig,
   shouldSyncLocalMediaProvidersToDaemon,
   syncComposioConfigToDaemon,
-  syncConfigToDaemon,
+  syncConfigToDaemon as syncLocalConfigToDaemon,
   syncMediaProvidersToDaemon,
 } from './state/config';
 import { createSilentUpdatePreferenceWriter } from './state/silent-update-preference';
@@ -989,6 +990,12 @@ export function App() {
 }
 
 function AppInner() {
+  const company = useCompany();
+  const saveConfig = useCallback((next: AppConfig) => {
+    if (!company.isMember) saveLocalConfig(next);
+  }, [company.isMember]);
+  const syncConfigToDaemon = useCallback((next: AppConfig, options?: Parameters<typeof syncLocalConfigToDaemon>[1]) =>
+    company.isMember ? Promise.resolve() : syncLocalConfigToDaemon(next, options), [company.isMember]);
   const { t, locale } = useI18n();
   const iframeKeepAlivePool = useIframeKeepAlivePool();
   const clientType = useMemo(() => detectClientType(), []);
@@ -1081,7 +1088,10 @@ function AppInner() {
       root.classList.remove('is-window-blurred');
     };
   }, [clientType, hostPlatform]);
-  const [config, setConfig] = useState<AppConfig>(() => loadConfig());
+  const [config, setConfig] = useState<AppConfig>(() => {
+    const initial = company.isMember ? { ...DEFAULT_CONFIG } : loadConfig();
+    return company.enabled ? { ...initial, mode: 'daemon', onboardingCompleted: true } : initial;
+  });
   const configRef = useRef(config);
   configRef.current = config;
   const latestPersistedConfigRef = useRef(config);
@@ -1572,6 +1582,11 @@ function AppInner() {
   // can't overwrite the saved state with `''` before hydration lands.
   const [composioConfigLoading, setComposioConfigLoading] = useState(true);
   const route = useRoute();
+  useEffect(() => {
+    if (company.enabled && route.kind === 'home' && route.view === 'onboarding') {
+      navigate({ kind: 'home', view: 'home' }, { replace: true });
+    }
+  }, [company.enabled, route]);
   useLayoutEffect(() => {
     navigationTiming.observeRoute(route);
   }, [route]);
@@ -2171,6 +2186,7 @@ function AppInner() {
     nextWorkspaceBucket: nextTabScopeWorkspaceId,
     nextAccountBucket: nextTabScopeAccountId,
   } = deriveTabIdentityScope({
+    companyUserId: company.enabled ? company.user?.id : undefined,
     amrLoginStatus,
     workspaceContext,
     workspaceContextLoading,
@@ -2265,6 +2281,7 @@ function AppInner() {
     config.onboardingCompleted === true &&
     !registrationInviteActive;
   useEffect(() => {
+    if (company.isMember) return;
     const body = activeProjectId
       ? { projectId: activeProjectId, fileName: activeFileName }
       : { active: false };
@@ -2278,7 +2295,7 @@ function AppInner() {
   }, [activeProjectId, activeFileName]);
 
   useEffect(() => {
-    if (!daemonLive || (amrCatalogScopeRef.current.scoped && !amrModelContext)) return;
+    if (company.enabled || !daemonLive || (amrCatalogScopeRef.current.scoped && !amrModelContext)) return;
     const issuedIdentity = amrCatalogIdentity;
     let cancelled = false;
     let timer: number | null = null;
@@ -2343,6 +2360,7 @@ function AppInner() {
   // AMR_LOGIN_STATUS_EVENT covers logins finishing in surfaces that
   // unmounted before their poll settled.
   useEffect(() => {
+    if (company.enabled) return;
     let cancelled = false;
     const sync = async (
       options: { refresh?: boolean } = {},
@@ -2594,8 +2612,8 @@ function AppInner() {
       // before daemon overrides it.
       void Promise.all([
         fetchDaemonConfig(),
-        fetchComposioConfigFromDaemon(),
-        fetchMediaProvidersFromDaemon(),
+        company.isMember ? Promise.resolve(null) : fetchComposioConfigFromDaemon(),
+        company.isMember ? Promise.resolve({ status: 'ok' as const, providers: {} }) : fetchMediaProvidersFromDaemon(),
       ]).then(async ([
         daemonConfig,
         daemonComposioConfig,
@@ -2628,6 +2646,7 @@ function AppInner() {
           ),
           daemonMediaProvidersLoaded,
         );
+        if (company.enabled) next.mode = 'daemon';
         const hasLocalComposioKey = Boolean(next.composio?.apiKey?.trim());
         if (!hasLocalComposioKey && daemonComposioConfig) {
           next.composio = daemonComposioConfig;
@@ -2639,7 +2658,7 @@ function AppInner() {
         // credentials). Startup only needs to write when migrating a legacy
         // plaintext key. Keep the credentials surface locked until that one
         // migration settles so an older key cannot race a user replacement.
-        if (hasLocalComposioKey) {
+        if (hasLocalComposioKey && !company.isMember) {
           const migrated = await syncComposioConfigToDaemon(next.composio);
           if (cancelled) return;
           // Only remove the legacy plaintext after the daemon confirms it was
@@ -2653,6 +2672,7 @@ function AppInner() {
         saveConfig(next);
         if (
           daemonMediaProvidersResult.status === 'ok'
+          && !company.isMember
           && migratedLocalMediaProviders
           && hasAnyConfiguredProvider(next.mediaProviders)
         ) {
@@ -2663,7 +2683,8 @@ function AppInner() {
         // Migrate localStorage prefs to daemon on first boot with the new
         // endpoint. If daemon already had values the merge above used them;
         // writing back is idempotent and keeps both sides in sync.
-        void syncConfigToDaemon(next);
+        // Company sessions hydrate centrally managed preferences without a browser migration.
+        if (!company.enabled) void syncConfigToDaemon(next);
         latestPersistedConfigRef.current = next;
         setConfig(next);
 
@@ -2673,7 +2694,7 @@ function AppInner() {
         // banner keys off `privacyDecisionAt`. They may coexist on the
         // first launch; the banner sits above the modal layer so it
         // stays actionable regardless of the active view.
-        if (shouldRouteToFirstRunOnboarding(next, window.location.pathname)) {
+        if (!company.enabled && shouldRouteToFirstRunOnboarding(next, window.location.pathname)) {
           navigate({ kind: 'home', view: 'onboarding' }, { replace: true });
         }
         setDaemonConfigLoaded(true);
@@ -5141,7 +5162,7 @@ function AppInner() {
   // it to that Workspace. Truly unbound local projects retain the ambient
   // account/workspace tab behavior.
   const workspaceTabsIdentityScopeKey =
-    route.kind === 'project'
+    company.enabled ? identityScopeKey : route.kind === 'project'
       ? activeProject === null
         ? null
         : activeProject.workspaceId
@@ -5674,7 +5695,8 @@ function AppInner() {
     await syncConfigToDaemon(next, { allowOnboardingReset: true });
   }, []);
 
-  const renderSettingsSurface = (presentation: 'modal' | 'page') => (
+  const renderSettingsSurface = (presentation: 'modal' | 'page') => company.enabled && !daemonConfigLoaded
+    ? <CenteredLoader label={t('entry.loadingWorkspace')} /> : (
     <SettingsDialog
       presentation={presentation}
       initial={config}

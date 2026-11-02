@@ -1017,13 +1017,25 @@ function injectPreviewContentSizeBridge(doc: string, documentEpoch: string): str
 function injectExportCaptureBridge(doc: string): string {
   const script = `<script data-od-export-capture-bridge>(function(){
   function raf(){ return new Promise(function(r){ requestAnimationFrame(function(){ r(); }); }); }
+  function pageReady(){
+    if (document.documentElement.getAttribute('data-od-preview-ready') !== 'false') return Promise.resolve();
+    // Honor an authored loading signal, with a bound for broken page scripts.
+    return new Promise(function(resolve){
+      var observer = new MutationObserver(function(){
+        if (document.documentElement.getAttribute('data-od-preview-ready') !== 'false') finish();
+      });
+      function finish(){ clearTimeout(timer); observer.disconnect(); resolve(); }
+      var timer = setTimeout(finish, 10000);
+      observer.observe(document.documentElement, { attributes:true, attributeFilter:['data-od-preview-ready'] });
+    });
+  }
   function settle(){
     var fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready.catch(function(){}) : Promise.resolve();
     var imgs = Promise.all(Array.prototype.slice.call(document.images||[]).map(function(img){
       if (img.complete) return Promise.resolve();
       return new Promise(function(r){ img.addEventListener('load', r, {once:true}); img.addEventListener('error', r, {once:true}); });
     }));
-    return Promise.all([fonts, imgs]).then(raf).then(raf);
+    return Promise.all([fonts, imgs, pageReady()]).then(raf).then(raf);
   }
   function deckState(){
     try { if (typeof window.__odDeckSlideState === 'function') return window.__odDeckSlideState(); } catch(_){}

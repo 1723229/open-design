@@ -14,6 +14,7 @@ import type {
   MemoryExtractionEvent,
 } from '@open-design/contracts';
 import { useT } from '../i18n';
+import { useCompany } from '../company/CompanyProvider';
 import { toastSlideUp } from '../motion';
 
 interface ActiveToast {
@@ -55,8 +56,10 @@ export function memoryToastSubscriptionMode(input: {
 
 export function MemoryToast({
   onOpenMemory,
-  subscriptionMode = 'always',
+  subscriptionMode: configuredSubscriptionMode = 'always',
 }: Props) {
+  const company = useCompany();
+  const subscriptionMode = company.enabled ? 'off' : configuredSubscriptionMode;
   const t = useT();
   const [toast, setToast] = useState<ActiveToast | null>(null);
   const [subscribed, setSubscribed] = useState(subscriptionMode !== 'off');

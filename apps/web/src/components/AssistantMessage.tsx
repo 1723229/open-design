@@ -1,3 +1,4 @@
+import { useCompany } from '../company/CompanyProvider';
 import { SHOW_UPSTREAM_LINKS } from '../product';
 import { Fragment, memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCharReveal } from "./chat/useCharReveal";
@@ -465,6 +466,7 @@ function AssistantMessageImpl({
   nextStepSkills,
   nextStepVariant = 'default',
 }: Props) {
+  const { presentation } = useCompany();
   const t = useT();
   const { workspaceContext } = useProjectCollabContext();
   const imageSrc = useCallback(
@@ -1332,7 +1334,7 @@ function AssistantMessageImpl({
       data-continuation={showRole ? 'false' : 'true'}
       data-assistant-message-id={message.id}
     >
-      {showRole ? (
+      {showRole && presentation.showAgentIdentity ? (
         <div className="role" data-testid="assistant-role">
           <AgentIcon id={roleIconId} size={20} className="role-agent-icon" />
           <span className="role-name">{roleName}</span>

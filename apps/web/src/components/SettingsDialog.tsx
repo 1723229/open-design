@@ -1,4 +1,8 @@
 import { SHOW_OFFICIAL_CLOUD, SHOW_UPSTREAM_LINKS } from '../product';
+import { useCompany } from '../company/CompanyProvider';
+import { CompanyMemberSettings } from '../company/CompanyControls';
+import { companyGeneralConfig, companyProviderUrl, useCompanyModelSettings } from '../company/useCompanyModelSettings';
+import companyStyles from '../company/company.module.css';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, Dispatch, SetStateAction } from 'react';
 import { Button, VisuallyHidden } from '@open-design/components';
@@ -269,6 +273,8 @@ export type SettingsSection =
 // the wrong nav item highlighted.
 function normalizeSettingsSection(section: SettingsSection): SettingsSection {
   switch (section) {
+    case 'labs':
+    case 'integrations':
     case 'language':
     case 'appearance':
     case 'notifications':
@@ -1504,10 +1510,17 @@ export function switchApiProtocolConfig(
   );
 }
 
-export function SettingsDialog({
+export function SettingsDialog(props: Props) {
+  const company = useCompany();
+  return company.isMember
+    ? <CompanyMemberSettings presentation={props.presentation} onClose={props.onClose} />
+    : <AdministratorSettingsDialog {...props} />;
+}
+
+function AdministratorSettingsDialog({
   presentation = 'modal',
   initial,
-  agents,
+  agents: hostAgents,
   agentsLoading = false,
   daemonLive,
   appVersionInfo,
@@ -1515,7 +1528,7 @@ export function SettingsDialog({
   initialSection = 'general',
   initialHighlight = null,
   persistedProjectWorkspaceId = null,
-  onPersist,
+  onPersist: persistConfig,
   onSilentUpdatePreferenceChange,
   onPersistComposioKey,
   composioConfigLoading = false,
@@ -1535,6 +1548,7 @@ export function SettingsDialog({
   onProviderModelsCacheChange,
   onDraftChange,
 }: Props) {
+  const company = useCompany();
   const { t, locale, setLocale } = useI18n();
   const analytics = useAnalytics();
   // Backfill the fixed-origin base URL on mount too, so a config persisted with
@@ -1547,13 +1561,36 @@ export function SettingsDialog({
   const initialFormConfig = initial.mode === 'api'
     ? restorePendingByokProviderDraft(normalizedInitialConfig)
     : normalizedInitialConfig;
-  const [cfg, setCfg] = useState<AppConfig>(() => initialFormConfig);
+  const [cfg, setCfg] = useState<AppConfig>(() => company.enabled
+    ? { ...initialFormConfig, apiKey: '', apiProtocolConfigs: {}, byokProviderConfigDrafts: {} }
+    : initialFormConfig);
+  const companyModels = useCompanyModelSettings(company.enabled, cfg, setCfg, hostAgents);
+  const effectiveCompanyModel = company.enabled ? companyModels.settings?.active : null;
+  const effectiveCompanyAgent = companyModels.settings?.agents.find(agent => agent.id === effectiveCompanyModel?.agentId);
+  const agents = companyModels.agents;
+  const companyPersistRef = useRef({ persist: companyModels.persist, persistConfig, initial });
+  const companyProviderDraftValidRef = useRef(true);
+  companyPersistRef.current = { persist: companyModels.persist, persistConfig, initial };
+  const companyOnPersist = useCallback<Props['onPersist']>(async (draft, options) => {
+    const current = companyPersistRef.current;
+    const general = companyGeneralConfig(draft, current.initial);
+    if (options?.forceMediaProviderSync || !isAutosaveDraftOnlyChange(general, companyGeneralConfig(current.initial, current.initial))) {
+      await current.persistConfig(general, options);
+    }
+    if (companyProviderDraftValidRef.current) await companyPersistRef.current.persist(draft);
+  }, []);
+  const onPersist = company.enabled ? companyOnPersist : persistConfig;
   const [maxTokensInput, setMaxTokensInput] = useState(
     initialFormConfig.maxTokens == null ? '' : String(initialFormConfig.maxTokens),
   );
+  const maxTokensNumber = Number(maxTokensInput.trim());
+  companyProviderDraftValidRef.current = !maxTokensInput.trim() || (Number.isInteger(maxTokensNumber) && maxTokensNumber >= MIN_MAX_TOKENS && maxTokensNumber <= MAX_MAX_TOKENS);
   const [pendingMediaProviderEditIds, setPendingMediaProviderEditIds] = useState<
     ReadonlySet<string>
   >(() => new Set());
+  useEffect(() => {
+    if (company.enabled) setMaxTokensInput(cfg.maxTokens == null ? '' : String(cfg.maxTokens));
+  }, [company.enabled, companyModels.providerId]);
   const previousInitialRef = useRef(initial);
   // Accent only — the theme is a constant now that the app ships light-only.
   const lastSavedAppearanceRef = useRef({
@@ -1561,7 +1598,7 @@ export function SettingsDialog({
   });
 
   useEffect(() => {
-    onDraftChange?.(cfg);
+    onDraftChange?.(company.enabled ? companyGeneralConfig(cfg, initial) : cfg);
   }, [cfg, onDraftChange]);
 
   // settings_view — fire on dialog open and on every section switch so the
@@ -1637,6 +1674,14 @@ export function SettingsDialog({
   }, []);
   const [showApiKey, setShowApiKey] = useState(false);
   const byokProviderFormDraftsRef = useRef<Record<string, ByokProviderFormDraft>>({});
+  useEffect(() => {
+    if (!company.enabled || cfg.apiKey) return;
+    for (const [key, draft] of Object.entries(byokProviderFormDraftsRef.current)) {
+      if (key.startsWith(`${cfg.apiProtocol}:`) && companyProviderUrl(draft.apiConfig.baseUrl) === companyProviderUrl(cfg.baseUrl)) {
+        byokProviderFormDraftsRef.current[key] = { ...draft, apiConfig: { ...draft.apiConfig, apiKey: '' } };
+      }
+    }
+  }, [company.enabled, cfg.apiKey]);
   const lastCustomByokProviderDraftKeysRef = useRef<Partial<Record<ApiProtocol, string>>>(
     (initial.apiProviderBaseUrl ?? null) === null
       ? { [initial.apiProtocol ?? 'anthropic']: byokProviderKeyForConfig(initial) }
@@ -1741,6 +1786,7 @@ export function SettingsDialog({
   }, [workspaceContext?.workspaceType, workspaceContextLoading]);
 
   useEffect(() => {
+    if (company.enabled) return;
     const hasAmrAgent = agents.some((agent) => agent.id === 'amr' && agent.available);
     if (!hasAmrAgent) {
       setAmrCardStatus(null);
@@ -1805,6 +1851,7 @@ export function SettingsDialog({
   // state until Settings is closed and reopened. Refetching on focus /
   // visibility keeps the signed-in state, email, and Sign out action live.
   useEffect(() => {
+    if (company.enabled) return;
     const hasAmrAgent = agents.some((agent) => agent.id === 'amr' && agent.available);
     if (!hasAmrAgent) return;
     let cancelled = false;
@@ -1832,6 +1879,7 @@ export function SettingsDialog({
   }, [agents, refreshAmrWalletSnapshot]);
 
   useEffect(() => {
+    if (company.enabled) return;
     const hasAmrAgent = agents.some((agent) => agent.id === 'amr' && agent.available);
     if (!hasAmrAgent) return;
     let cancelled = false;
@@ -2220,13 +2268,18 @@ export function SettingsDialog({
           mode_after: modeAfter,
         });
       }
-      if (mode === 'api' && c.mode !== 'api') {
+      if (!company.enabled && mode === 'api' && c.mode !== 'api') {
         return restorePendingByokProviderDraft({ ...c, mode });
       }
       return { ...c, mode };
     });
   };
   const setByokProvider = (provider: ByokProviderPreset) => {
+    if (company.enabled) {
+      setApiModelCustomEditing(false);
+      companyModels.selectPreset(provider.protocol, provider.baseUrl, Boolean(provider.custom));
+      return;
+    }
     const currentDraftKey = byokProviderKeyForConfig(cfg);
     const currentApiConfig = currentApiProtocolConfig(cfg);
     if ((cfg.apiProviderBaseUrl ?? null) === null) {
@@ -2532,7 +2585,21 @@ export function SettingsDialog({
     };
   }, [amrCardSignedIn]);
 
+  const companyTestRequestRef = useRef({ agent: 0, provider: 0 });
+  const companyCatalogRequestRef = useRef(0);
+  const handleCompanyTest = async (target: 'agent' | 'provider', selection?: { agentId: string; model?: string }) => {
+    if (target === 'provider' && !companyProviderDraftValidRef.current) return;
+    const request = ++companyTestRequestRef.current[target];
+    const update = target === 'agent' ? setAgentTestState : setProviderTestState;
+    update({ status: 'running' });
+    try {
+      const result = await (selection ? companyModels.choose(selection.agentId, selection.model) : companyModels.test());
+      if (companyTestRequestRef.current[target] === request) update(result ? { status: 'done', result } : { status: 'idle' });
+    }
+    catch (reason) { if (companyTestRequestRef.current[target] === request) update({ status: 'done', result: { ok: false, kind: 'unknown', latencyMs: 0, detail: String(reason instanceof Error ? reason.message : reason) } }); }
+  };
   const handleTestAgent = async () => {
+    if (company.enabled) return handleCompanyTest('agent');
     if (agentTestState.status === 'running') {
       return;
     }
@@ -2609,6 +2676,7 @@ export function SettingsDialog({
   const handleTestProvider = async (
     options: { silentPreconditions?: boolean } = {},
   ) => {
+    if (company.enabled) return handleCompanyTest('provider');
     if (providerTestState.status === 'running') {
       return;
     }
@@ -2762,6 +2830,27 @@ export function SettingsDialog({
   const handleFetchProviderModels = async (
     options: { silent?: boolean; trigger?: 'auto' | 'manual' } = {},
   ) => {
+    if (company.enabled) {
+      if (!companyProviderDraftValidRef.current) return;
+      const request = ++companyCatalogRequestRef.current;
+      let cacheKey = providerModelsKey;
+      const started = performance.now();
+      setProviderModelsState({ status: 'running', cacheKey });
+      try {
+        const value = await companyModels.catalog(saved => {
+          cacheKey = `company:${saved.id}:${apiProtocol}:${saved.baseUrl}`;
+        });
+        if (companyCatalogRequestRef.current !== request) return;
+        if (!value) { setProviderModelsState({ status: 'idle' }); return; }
+        const models = value.models.map(id => ({ id, label: id }));
+        activeSetProviderModelsCache(previous => ({ ...previous, [cacheKey]: models }));
+        setProviderModelsState({ status: 'done', cacheKey, result: { ok: true, kind: 'success', latencyMs: Math.round(performance.now() - started), models } });
+      } catch (reason) {
+        if (companyCatalogRequestRef.current !== request) return;
+        setProviderModelsState({ status: 'done', cacheKey, result: { ok: false, kind: 'unknown', latencyMs: 0, detail: String(reason instanceof Error ? reason.message : reason) } });
+      }
+      return;
+    }
     const trigger = options.trigger ?? (options.silent ? 'auto' : 'manual');
     const byokProviderId = byokProtocolToTracking(apiProtocol);
     const trackModelsFetchResult = (
@@ -2960,6 +3049,7 @@ export function SettingsDialog({
     const sample = result.sample ?? '';
     const agentName = result.agentName ?? '';
     const testedModel = result.model ?? cfg.model;
+    if (result.ok && company.enabled) return t('company.models.testSuccess', { ms });
     if (result.ok) {
       const baseMessage = kindForSuccess === 'api'
         ? t('settings.testSuccessApi', { ms, sample })
@@ -3275,7 +3365,7 @@ export function SettingsDialog({
       autosaveRetryTimerRef.current = null;
     }
     claimAutosaveStatus('idle');
-    onResetOnboarding({ ...cfg, onboardingCompleted: false });
+    onResetOnboarding({ ...(company.enabled ? companyGeneralConfig(cfg, initial) : cfg), onboardingCompleted: false });
   }, [cfg, claimAutosaveStatus, onResetOnboarding]);
 
   useEffect(() => {
@@ -3285,6 +3375,13 @@ export function SettingsDialog({
     }
     if (suppressNextAutosaveRef.current) {
       suppressNextAutosaveRef.current = false;
+      return;
+    }
+    if (company.enabled && mediaProvidersChangeVersionRef.current <= lastSyncedMediaProvidersVersionRef.current
+      && !(companyProviderDraftValidRef.current && companyModels.hasChanges(cfg))
+      && isAutosaveDraftOnlyChange(companyGeneralConfig(cfg, initial), companyGeneralConfig(autosaveLastSavedRef.current, initial))) {
+      autosavePendingFlushRef.current = false;
+      claimAutosaveStatus('idle');
       return;
     }
     const autosaveClaim = claimAutosaveStatus('pending');
@@ -3304,7 +3401,7 @@ export function SettingsDialog({
       autosavePendingFlushRef.current = false;
       autosaveTimerRef.current = null;
       const snapshot = autosaveLatestRef.current;
-      const preflightReason = snapshot.mode === 'api'
+      const preflightReason = !company.enabled && snapshot.mode === 'api'
         ? byokPreflightBlockReason(snapshot)
         : null;
       if (preflightReason) {
@@ -3328,7 +3425,7 @@ export function SettingsDialog({
         byokPreflightTrackingRef.current = null;
       }
       const committedClearedProviderKey = committedClearedByokProviderKeyRef.current;
-      const persistedSnapshot = resolveSettingsAutosavePayload(
+      const persistedSnapshot = company.enabled ? snapshot : resolveSettingsAutosavePayload(
         snapshot,
         autosaveLastSavedRef.current,
         {
@@ -3350,7 +3447,7 @@ export function SettingsDialog({
       // is a real outbound effect even when the persisted shape
       // hasn't changed.
       if (
-        !persistOptions.forceMediaProviderSync
+        !company.enabled && !persistOptions.forceMediaProviderSync
         && isAutosaveDraftOnlyChange(persistedSnapshot, autosaveLastSavedRef.current)
       ) {
         settleAutosaveStatus(autosaveClaim, 'idle');
@@ -3442,7 +3539,7 @@ export function SettingsDialog({
         // the latest copy from the synchronous saveConfig call inside
         // onPersist.
         autosavePendingFlushRef.current = false;
-        const persistedSnapshot = resolveSettingsAutosavePayload(
+        const persistedSnapshot = company.enabled ? autosaveLatestRef.current : resolveSettingsAutosavePayload(
           autosaveLatestRef.current,
           autosaveLastSavedRef.current,
           {
@@ -3488,7 +3585,7 @@ export function SettingsDialog({
       }
       return (
         p.baseUrl === cfg.apiProviderBaseUrl &&
-        (p.baseUrl === cfg.baseUrl || (apiProtocol === 'azure' && p.baseUrl === ''))
+        (p.baseUrl === cfg.baseUrl || (company.enabled && companyProviderUrl(p.baseUrl) === companyProviderUrl(cfg.baseUrl)) || (apiProtocol === 'azure' && p.baseUrl === ''))
       );
     });
   const selectedProvider = selectedProviderIndex >= 0 ? protocolProviders[selectedProviderIndex] : undefined;
@@ -3499,12 +3596,15 @@ export function SettingsDialog({
   // Fixed-origin gateways resolve their Base URL automatically; nothing for the
   // user to edit, so hide the field entirely.
   const showBaseUrlField = !isFixedOriginGateway(apiProtocol);
-  const byokRequiresApiKey = byokProviderRequiresApiKey(
+  const byokRequiresApiKey = !companyModels.hasConfiguredKey && byokProviderRequiresApiKey(
     apiProtocol,
     selectedProvider,
     cfg.baseUrl,
   );
   const byokProviderConfigured = (provider: ByokProviderPreset): boolean => {
+    if (company.enabled) return companyModels.settings?.providers.some(saved => saved.hasApiKey && saved.models.length > 0 && (provider.custom
+      ? !KNOWN_PROVIDERS.some(p => companyProviderUrl(p.baseUrl) === companyProviderUrl(saved.baseUrl))
+      : companyProviderUrl(provider.baseUrl) === companyProviderUrl(saved.baseUrl))) ?? false;
     if (provider.custom) {
       return canRunProviderConnectionTest(currentApiProtocolConfig(cfg), {
         requiresApiKey: byokRequiresApiKey,
@@ -3572,7 +3672,7 @@ export function SettingsDialog({
     [byokDraftValidation],
   );
   const byokActivationPreflightReason = useMemo(
-    () => byokPreflightBlockReason(cfg),
+    () => company.enabled ? null : byokPreflightBlockReason(cfg),
     [
       cfg.apiKey,
       cfg.apiProtocol,
@@ -3608,13 +3708,10 @@ export function SettingsDialog({
     ],
   );
   const providerModelsKey = useMemo(
-    () => providerModelsCacheKey(
-      apiProtocol,
-      cfg.baseUrl,
-      cfg.apiKey,
-      cfg.apiVersion ?? '',
-    ),
-    [apiProtocol, cfg.baseUrl, cfg.apiKey, cfg.apiVersion],
+    () => company.enabled
+      ? `company:${companyModels.providerId}:${apiProtocol}:${cfg.baseUrl}`
+      : providerModelsCacheKey(apiProtocol, cfg.baseUrl, cfg.apiKey, cfg.apiVersion ?? ''),
+    [company.enabled, companyModels.providerId, apiProtocol, cfg.baseUrl, cfg.apiKey, cfg.apiVersion],
   );
   const providerModelDiscoveryUnavailable =
     apiProtocol !== 'azure' &&
@@ -3718,6 +3815,10 @@ export function SettingsDialog({
   ]);
   useEffect(() => {
     if (cfg.mode !== 'api') return;
+    if (company.enabled) {
+      if (companyModels.hasConfiguredKey && !cfg.apiKey && providerModelsCommittedKey !== providerModelsKey) setProviderModelsCommittedKey(providerModelsKey);
+      return;
+    }
     if (visualStabilityMode) return;
     if (providerTestState.status === 'running') return;
     if (byokFirstPartyBaseUrl?.hostTypo) return;
@@ -4060,6 +4161,7 @@ export function SettingsDialog({
     const setChoice = (
       next: { model?: string; reasoning?: string; serviceTier?: string },
     ) => {
+      if (company.enabled && next.model) { void handleCompanyTest('agent', { agentId: selected.id, model: next.model }); return; }
       setCfg((c) => {
         const prev = c.agentModels?.[selected.id] ?? {};
         const merged = { ...prev, ...next };
@@ -4401,17 +4503,7 @@ export function SettingsDialog({
                 <small>{t('settings.generalHint')}</small>
               </span>
             </button>
-            <button
-              type="button"
-              className={`settings-nav-item${activeSection === 'labs' ? ' active' : ''}`}
-              onClick={() => setActiveSection('labs')}
-            >
-              <Icon name="sparkles" size={18} />
-              <span>
-                <strong>{t('labs.title')}</strong>
-                <small>{t('labs.navHint')}</small>
-              </span>
-            </button>
+
             <button
               type="button"
               className={`settings-nav-item${activeSection === 'instructions' ? ' active' : ''}`}
@@ -4445,17 +4537,7 @@ export function SettingsDialog({
                 <small>Image / video / audio</small>
               </span>
             </button>
-            <button
-              type="button"
-              className={`settings-nav-item${activeSection === 'integrations' ? ' active' : ''}`}
-              onClick={() => setActiveSection('integrations')}
-            >
-              <Icon name="puzzle" size={18} />
-              <span>
-                <strong>{t('settings.mcpServerTitle')}</strong>
-                <small>{t('settings.mcpServerHint')}</small>
-              </span>
-            </button>
+
             {SHOW_UPSTREAM_LINKS ? <button
               type="button"
               className={`settings-nav-item${activeSection === 'privacy' ? ' active' : ''}`}
@@ -4531,7 +4613,19 @@ export function SettingsDialog({
                   <span className="seg-meta">{t('settings.modeApi')}</span>
                 </button>
               </div>
+              {effectiveCompanyModel && <div className={companyStyles.effectiveSummary} data-testid="company-model-effective" role="status">
+                <div className={companyStyles.effectiveIdentity}>
+                  <span>{t('company.models.effective')}</span>
+                  <strong>{effectiveCompanyAgent?.name ?? effectiveCompanyModel.agentId}</strong>
+                  <span>{effectiveCompanyModel.model}</span>
+                </div>
+                {effectiveCompanyModel.baseUrl && <div className={companyStyles.effectiveAddress}>
+                  <span>{t('settings.baseUrl')}</span>
+                  <span>{effectiveCompanyModel.baseUrl}</span>
+                </div>}
+              </div>}
               </div>
+              {company.enabled && companyModels.error && <p className="field-error" role="alert">{companyModels.error}</p>}
               {SHOW_OFFICIAL_CLOUD && cfg.mode === 'daemon' && !amrCardSignedIn ? (
                 // Only prompt to sign into OpenDesign Cloud when NOT already
                 // signed in — the AMR/vela session IS the cloud identity (one
@@ -4851,6 +4945,7 @@ export function SettingsDialog({
                               className={
                                 'agent-card agent-card-installed' +
                                 (active ? ' active' : '') +
+                                (effectiveCompanyModel?.agentId === a.id ? ` ${companyStyles.effectiveCard}` : '') +
                                 (needsSetup ? ' agent-card-needs-setup' : '') +
                                 (amrHighlighted ? ' agent-card--amr-highlight' : '') +
                                 (isAmrAgent && !amrCardSignedIn ? ' agent-card--amr-signed-out' : '')
@@ -4862,6 +4957,7 @@ export function SettingsDialog({
                                   className="agent-card-select"
                                   data-testid={`settings-agent-select-${a.id}`}
                                   onClick={() => {
+                                    if (company.enabled) { void handleCompanyTest('agent', { agentId: a.id }); return; }
                                     trackSettingsLocalCliClick(analytics.track, {
                                       page_name: 'settings',
                                       area: 'configure_execution_mode_local_cli',
@@ -4908,6 +5004,10 @@ export function SettingsDialog({
                                         <span className="agent-card-title">
                                           {agentName}
                                         </span>
+                                        {effectiveCompanyModel?.agentId === a.id && <span className={companyStyles.inUseBadge}>
+                                          <Icon name="check" size={12} />
+                                          {t('company.models.inUse')}
+                                        </span>}
                                         {isAmrAgent ? (
                                           <span
                                             className="agent-card-benefits"
@@ -4997,6 +5097,7 @@ export function SettingsDialog({
                                           ) : null}
                                         </div>
                                       ) : null}
+                                      {effectiveCompanyModel?.agentId === a.id && <span className={companyStyles.effectiveModel}>{t('company.models.effective')}: {effectiveCompanyModel.model}</span>}
                                       {!active && modelSummary ? (
                                         <div className="agent-card-model-summary">
                                           <span>{t('settings.modelPicker')}</span>
@@ -5294,7 +5395,7 @@ export function SettingsDialog({
                                   content above by a hair divider: Docs + Rescan
                                   as quiet icon buttons, Install as the primary
                                   labelled CTA holding the right edge. */}
-                              <div className="agent-card-footer">
+                              <div className="agent-card-footer" hidden={company.enabled}>
                                 {docsUrl ? (
                                   <a
                                     href={docsUrl}
@@ -5402,11 +5503,11 @@ export function SettingsDialog({
                       <MemoryModelInline
                         mode="daemon"
                         apiProtocol={apiProtocol}
-                        chatApiKey={cfg.apiKey}
+                        chatApiKey={company.enabled ? '' : cfg.apiKey}
                         chatBaseUrl={cfg.baseUrl}
                         chatApiVersion={cfg.apiVersion ?? ''}
-                        chatModel={modelValue}
-                        cliAgentId={selected.id}
+                        chatModel={company.enabled ? companyModels.settings?.active?.model ?? '' : modelValue}
+                        cliAgentId={company.enabled ? companyModels.settings?.active?.agentId : selected.id}
                         cliModelOptions={
                           hasModels ? selected.models!.map((m) => m.id) : []
                         }
@@ -5432,6 +5533,7 @@ export function SettingsDialog({
                   users no longer wonder "are these fields I forgot to
                   fill in?".
                 */
+                if (company.enabled) return null;
                 const cliEnvFields = AGENT_CLI_ENV_FIELDS.filter(
                   (field) => field.agentId === cfg.agentId,
                 );
@@ -5510,7 +5612,7 @@ export function SettingsDialog({
                 <div>
                   <div className="settings-byok-title">
                     <h3>{API_PROTOCOL_LABELS[apiProtocol]}</h3>
-                    <span className="settings-byok-info-wrap">
+                    {!company.enabled && <span className="settings-byok-info-wrap">
                       <button
                         type="button"
                         className="settings-byok-info-button"
@@ -5528,7 +5630,7 @@ export function SettingsDialog({
                       >
                         {t('settings.byokNoFileToolsNotice')}
                       </span>
-                    </span>
+                    </span>}
                   </div>
                 </div>
                 <ByokConnectionTestControl
@@ -5605,11 +5707,13 @@ export function SettingsDialog({
               ) : null}
               <ByokKeyField
                 apiKey={cfg.apiKey}
+                hasConfiguredKey={companyModels.hasConfiguredKey}
                 apiKeyConsoleLink={apiKeyConsoleLink}
                 apiProtocol={apiProtocol}
                 inputRef={apiKeyInputRef}
                 labels={{
-                  apiHint: t('settings.apiHint'),
+                  apiHint: company.enabled ? t('company.models.keyStorage') : t('settings.apiHint'),
+                  configuredKeyHint: company.enabled ? t('company.models.keyHint') : undefined,
                   apiKey: t('settings.apiKey'),
                   apiKeyCleaned: t('settings.apiKeyCleaned'),
                   apiKeyGetLink: t('settings.apiKeyGetLink', {
@@ -5700,7 +5804,9 @@ export function SettingsDialog({
                   placeholder={String(modelMaxTokensDefault(cfg.model))}
                   value={maxTokensInput}
                   onChange={(e) => updateMaxTokensInput(e.target.value)}
-                  onBlur={() => setMaxTokensInput(cfg.maxTokens == null ? '' : String(cfg.maxTokens))}
+                  onBlur={() => {
+                    if (!company.enabled || companyProviderDraftValidRef.current) setMaxTokensInput(cfg.maxTokens == null ? '' : String(cfg.maxTokens));
+                  }}
                 />
                 <p className="hint">{t('settings.maxTokensHint')}</p>
               </label>
@@ -5790,12 +5896,13 @@ export function SettingsDialog({
                 </summary>
                 <div className="agent-cli-env-body">
                   <MemoryModelInline
-                    mode="api"
+                    mode={company.enabled ? 'daemon' : 'api'}
+                    cliAgentId={company.enabled ? companyModels.settings?.active?.agentId : undefined}
                     apiProtocol={apiProtocol}
-                    chatApiKey={cfg.apiKey}
+                    chatApiKey={company.enabled ? '' : cfg.apiKey}
                     chatBaseUrl={cfg.baseUrl}
                     chatApiVersion={cfg.apiVersion ?? ''}
-                    chatModel={cfg.model}
+                    chatModel={company.enabled ? companyModels.settings?.active?.model ?? '' : cfg.model}
                     apiModelOptions={apiModelOptions}
                   />
                 </div>

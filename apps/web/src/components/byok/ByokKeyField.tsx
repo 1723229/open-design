@@ -5,11 +5,13 @@ import { cleanByokApiKey } from './validation';
 
 interface ByokKeyFieldProps {
   apiKey: string;
+  hasConfiguredKey?: boolean;
   apiKeyConsoleLink: { host: string; url: string };
   apiProtocol: ApiProtocol;
   inputRef: Ref<HTMLInputElement>;
   labels: {
     apiHint: string;
+    configuredKeyHint?: string;
     apiKeyCleaned: string;
     apiKey: string;
     apiKeyGetLink: string;
@@ -31,6 +33,7 @@ interface ByokKeyFieldProps {
 
 export function ByokKeyField({
   apiKey,
+  hasConfiguredKey = false,
   apiKeyConsoleLink,
   apiProtocol,
   inputRef,
@@ -45,7 +48,7 @@ export function ByokKeyField({
 }: ByokKeyFieldProps) {
   const [apiKeyCleanedNotice, setApiKeyCleanedNotice] = useState(false);
   const fieldClassName =
-    requiresApiKey && !apiKey.trim()
+    requiresApiKey && !hasConfiguredKey && !apiKey.trim()
       ? 'field settings-byok-required-empty'
       : 'field';
   const handleChange = (value: string) => {
@@ -80,7 +83,7 @@ export function ByokKeyField({
             ref={inputRef}
             aria-label={labels.apiKey}
             type={showApiKey ? 'text' : 'password'}
-            placeholder={API_KEY_PLACEHOLDERS[apiProtocol]}
+            placeholder={hasConfiguredKey ? labels.configuredKeyHint ?? labels.apiHint : API_KEY_PLACEHOLDERS[apiProtocol]}
             value={apiKey}
             aria-invalid={showApiKeyInvalid || undefined}
             onChange={(e) => handleChange(e.target.value)}

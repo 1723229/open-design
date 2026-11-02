@@ -342,6 +342,7 @@ function assertProjectCreatePreparationWithinDeadline(
 }
 
 export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation' | 'collabSync'> {
+  company?: Pick<import('../../company/routes.js').CompanyRuntime, 'filterProjects' | 'claimProject'>;
   /** Stop public bindings before any catalog/local deletion; production supplies this capability. */
   stopPublicFilesBeforeDelete?: CommentFileDeletion;
   publicFileMutations?: PublicFileMutations;
@@ -3358,7 +3359,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     }
   });
 
-  app.get('/api/projects', async (_req, res) => {
+  app.get('/api/projects', async (req, res) => {
     try {
       const locations = await configuredProjectLocations();
       const latestRunStatuses = listLatestProjectRunStatuses(db);
@@ -3393,7 +3394,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       // ever resolve to misses).
       /** @type {import('@open-design/contracts').ProjectsResponse} */
       const body = {
-        projects: listUnboundProjects(db)
+        projects: (ctx.company ? ctx.company.filterProjects(req, listUnboundProjects(db)) : listUnboundProjects(db))
           .filter((project: any) => projectVisibleForLocations(project, locations))
           .map((project: any) => ({
             ...project,
@@ -4506,6 +4507,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
             createdAt: now,
             updatedAt: now,
           });
+          ctx.company?.claimProject(req, id);
           // Project, seed conversation, and workspace membership form one
           // ownership record. A binding failure must leave none of them behind.
           insertConversation(db, {
@@ -4902,6 +4904,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           createdAt: now,
           updatedAt: now,
         });
+        ctx.company?.claimProject(req, targetProjectId);
         insertedProject = true;
         bindDuplicateIntoRequestWorkspace(createHome, targetProjectId, now);
         const conversationId = randomId();
@@ -5951,6 +5954,7 @@ export function registerProjectArtifactRoutes(app: Express, ctx: RegisterProject
 }
 
 export interface RegisterProjectFileRoutesDeps extends RouteDeps<'db' | 'http' | 'paths' | 'uploads' | 'node' | 'projectStore' | 'projectFiles' | 'documents' | 'artifacts' | 'projectPreviewScopes'> {
+  company?: Pick<import('../../company/routes.js').CompanyRuntime,'previewOwnerKey'>;
   isProjectEditingBusy?: (projectId: string) => boolean;
   publicFileMutations?: PublicFileMutations;
   stopPublicFilesBeforeDelete?: CommentFileDeletion;
@@ -6921,6 +6925,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
               workspaceId: requestContext.workspaceId,
               workspaceMemberId: requestContext.workspaceMemberId,
             },
+        {ownerKey:ctx.company?.previewOwnerKey(req) ?? ''},
       );
       const expiresAt = projectPreviewScopes.expiresAt(project.id, scope);
       if (expiresAt === undefined) {
@@ -6990,7 +6995,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
         project.id,
         { mode: 'read', allowNavigationQuery: true },
       )) return;
-      const expiresAt = projectPreviewScopes.renew(project.id, scope);
+      const expiresAt = projectPreviewScopes.renew(project.id, scope, {ownerKey:ctx.company?.previewOwnerKey(req) ?? ''});
       if (expiresAt === undefined) {
         sendApiError(res, 404, 'PREVIEW_SCOPE_NOT_FOUND', 'preview scope not found');
         return;
@@ -7243,7 +7248,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
                   workspaceMemberId: headerContext.workspaceMemberId,
                 }
               : null;
-          const scope = projectPreviewScopes.acquire(projectId, previewWorkspace);
+          const scope = projectPreviewScopes.acquire(projectId, previewWorkspace, {ownerKey:ctx.company?.previewOwnerKey(req) ?? ''});
           // The document's own expiry, not the live one: renewal must keep the
           // scope alive without changing a single byte of what this read
           // returns.

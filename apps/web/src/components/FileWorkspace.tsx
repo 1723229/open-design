@@ -1,3 +1,4 @@
+import { useCompany } from '../company/CompanyProvider';
 import { useExperienceError } from '../observability/use-experience-error';
 import type { RecoveryActionBlockReason } from '../runtime/chat/recovery-gating';
 import {
@@ -1438,6 +1439,7 @@ export function FileWorkspace({
   const refreshFilesWithoutResult = useCallback(async () => {
     await onRefreshFiles();
   }, [onRefreshFiles]);
+  const company = useCompany();
   const { locale, t } = useI18n();
   const { workspaceContext } = useProjectCollabContext();
   const iframeKeepAlivePool = useIframeKeepAlivePool();
@@ -3961,6 +3963,7 @@ export function FileWorkspace({
   }, [projectShareMenuOpen]);
 
   useEffect(() => {
+    if (company.enabled) return;
     if (projectReadsHeld) return;
     let cancelled = false;
     let refreshSeq = 0;
@@ -3976,7 +3979,7 @@ export function FileWorkspace({
       cancelled = true;
       window.removeEventListener(TEAM_PROJECTS_CHANGED_EVENT, refreshShareAccess);
     };
-  }, [projectId, projectReadsHeld, projectShareMenuOpen, workspaceContext]);
+  }, [projectId, projectReadsHeld, projectShareMenuOpen, workspaceContext, company.enabled]);
 
   useEffect(() => {
     if (!projectShareMenuOpen) setProjectShareAccessMenuOpen(false);

@@ -42,6 +42,7 @@ export function opencodeByokModelId(model: string | null | undefined): string | 
 export function buildOpenCodeByokProviderConfig(
   provider: ByokChatProviderConfig | null | undefined,
   model: string | null | undefined,
+  options?: { openaiWireApi?: 'responses' | 'chat-completions' },
 ): OpenCodeByokProviderConfig | null {
   if (!provider || typeof provider !== 'object') return null;
   const protocol = provider.protocol;
@@ -70,6 +71,7 @@ export function buildOpenCodeByokProviderConfig(
     baseUrl,
     provider.apiVersion,
     needsApiKey,
+    options?.openaiWireApi,
   );
   const config = {
     provider: {
@@ -179,6 +181,7 @@ function buildProviderEntry(
   baseUrl: string,
   apiVersion: string | undefined,
   includeApiKey: boolean,
+  openaiWireApi?: 'responses' | 'chat-completions',
 ): { npm: ProviderPackage; options: Record<string, unknown> } {
   const apiKeyOption = includeApiKey
     ? { apiKey: `{env:${BYOK_OPENCODE_API_KEY_ENV}}` }
@@ -223,10 +226,9 @@ function buildProviderEntry(
         },
       };
     case 'openai':
-      // Real OpenAI speaks the Responses API via @ai-sdk/openai. Every other
-      // host under the "openai" protocol (DeepSeek, vLLM, etc.) only serves
-      // /chat/completions, so route it through @ai-sdk/openai-compatible.
-      if (isRealOpenAIHost(baseUrl)) {
+      // Preserve legacy host-based defaults unless the caller has verified an
+      // exact native transport (e.g. a scoped proxy for a custom Responses API).
+      if (openaiWireApi === 'responses' || (openaiWireApi === undefined && isRealOpenAIHost(baseUrl))) {
         return {
           npm: '@ai-sdk/openai',
           options: {

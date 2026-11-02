@@ -11,6 +11,7 @@ import {
 import type { Project } from '../../types';
 import { useProjectShareHistoryState } from '../share/useProjectShareHistory';
 import { currentWorkspaceAccountGeneration } from '../../collab/workspace-identity';
+import { useCompany } from '../../company/CompanyProvider';
 
 /** Return `false` (or reject) when the daemon refused or the request failed;
  *  anything else means the project is gone. */
@@ -33,6 +34,7 @@ export function useProjectDeleteFlow(input: {
 }) {
   const { onDelete, analyticsPage, workspaceContext } = input;
   const analytics = useAnalytics();
+  const company = useCompany();
   const [target, setTarget] = useState<Project | null>(null);
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
@@ -40,8 +42,8 @@ export function useProjectDeleteFlow(input: {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const accountGeneration = currentWorkspaceAccountGeneration();
   const { history, status } = useProjectShareHistoryState(target && workspaceContext ? target.id : undefined, workspaceContext, 'delete-confirmation');
-  const shareReadStatus = target && !workspaceContext ? 'error' : status;
-  const activeShareCount = history ? history.publications.filter(publication => publication.status === 'active').length : null;
+  const shareReadStatus = company.enabled ? 'ready' : target && !workspaceContext ? 'error' : status;
+  const activeShareCount = company.enabled ? 0 : history ? history.publications.filter(publication => publication.status === 'active').length : null;
 
   const request = useCallback((project: Project) => {
     setFailed(false);

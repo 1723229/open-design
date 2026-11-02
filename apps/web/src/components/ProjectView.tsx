@@ -408,6 +408,7 @@ import {
   writeProjectSplitLayout,
 } from './project-split-layout';
 import type { SettingsSection } from './SettingsDialog';
+import { useCompanyProjectReadOnly } from '../company/useCompanyProjectReadOnly';
 import { Toast } from './Toast';
 import { FirstArtifactHint } from './FirstArtifactHint';
 import {
@@ -2514,8 +2515,9 @@ export function ProjectView({
   // proves first materialization finished. Keep the read-only ownership banner
   // keyed to `projectCollab.viewerOnly` below so an owner reinstall sees a
   // syncing project, not the misleading “shared by someone else” notice.
+  const companyProjectReadOnly = useCompanyProjectReadOnly(projectReadsHeld ? null : project.id);
   const projectMutationReadOnly =
-    projectCollab.viewerOnly || projectCollab.materializationPending
+    companyProjectReadOnly || projectCollab.viewerOnly || projectCollab.materializationPending
     || projectCollab.contentUpdatePending;
   const { resolve: resolvePresenceMember } = useTeamMembers(
     currentUserDirectoryEntry(projectRunWorkspaceContext),
@@ -2527,13 +2529,14 @@ export function ProjectView({
   // unbound projects retain their existing local-daemon persistence once the
   // daemon has settled that scope. The local project row is not an unbound
   // authority witness: it can lag a daemon-side Team binding.
-  const projectTabsCanPersistToDaemon =
+  const projectTabsCanPersistToDaemon = !companyProjectReadOnly && (
     projectWorkspaceScopeState.scope?.kind === 'unbound'
     || projectWorkspaceScopeState.scope?.kind === 'personal'
     || (
       projectWorkspaceScopeState.scope?.kind === 'team'
       && projectCollab.writerAuthority === 'allowed'
-    );
+    )
+  );
   const projectTabsCanPersistToDaemonRef = useRef(
     projectTabsCanPersistToDaemon,
   );

@@ -30,6 +30,50 @@ export const LOCALE_LABEL: Record<Locale, string> = {
 // flat (not deeply nested) so missing-key TS errors point straight at the
 // offending string instead of a generic object mismatch.
 export interface Dict {
+
+  'company.models.effective': string;
+  'company.models.inUse': string;
+  'company.models.keyStorage': string;
+  'company.models.testSuccess': string;
+  'company.models.keyHint': string;
+
+  'company.temporaryPassword': string;
+  'company.createUser': string;
+  'company.localUserHint': string;
+
+  'company.signIn': string;
+  'company.signInHint': string;
+  'company.username': string;
+  'company.password': string;
+  'company.changePassword': string;
+  'company.changePasswordHint': string;
+  'company.currentPassword': string;
+  'company.newPassword': string;
+  'company.sessionError': string;
+  'company.loginError': string;
+  'company.passwordError': string;
+  'company.retry': string;
+  'company.logout': string;
+  'company.users': string;
+  'company.disabled': string;
+  'company.enabled': string;
+  'company.disable': string;
+  'company.enable': string;
+  'company.sharing': string;
+  'company.shareLinkHint': string;
+  'company.addMember': string;
+  'company.removeMember': string;
+  'company.member': string;
+  'company.admin': string;
+  'company.viewer': string;
+  'company.editor': string;
+  'company.owner': string;
+  'company.selectUser': string;
+  'company.role': string;
+  'company.managedSettings': string;
+  'company.loadError': string;
+  'company.saveError': string;
+
   'workspaceQuota.unavailable': string;
   'workspaceQuota.designPlanAllowance': string;
   'workspaceQuota.subscribeToUse': string;

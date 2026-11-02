@@ -7,6 +7,11 @@
 .od
 .ocd
 node_modules
+**/node_modules
+.tmp
+.env*
+**/.next
+**/dist
 dist
 coverage
 *.log

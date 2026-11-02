@@ -1,0 +1,26 @@
+authentication:
+  enabled: true
+  default_provider: ldap
+  local_admin:
+    enabled: true
+    username: admin
+  providers:
+    ldap:
+      bind_mode: service
+      url: ldap://directory.internal:389
+      base_dn: dc=example,dc=internal
+      user_base_dn: ou=people,dc=example,dc=internal
+      user_filter: "(&(objectClass=inetOrgPerson)(uid={username}))"
+      username_attribute: uid
+      bind_dn: cn=admin,dc=example,dc=internal
+      bind_password: ${NEXUS_LDAP_BIND_PASSWORD}
+      connect_timeout_seconds: 5
+      search_timeout_seconds: 5
+      start_tls: false
+      verify_tls: false
+      auto_create_local_user: true
+server:
+  public_origin: http://nexusdesign.internal:7456
+presentation:
+  show_agent_identity: false
+  hidden_settings_sections: [labs, integrations]

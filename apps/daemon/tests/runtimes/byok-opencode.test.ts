@@ -10,6 +10,18 @@ import {
 import { byokOpenCodeAgentDef } from '../../src/runtimes/defs/byok-opencode.js';
 
 describe('byok-opencode runtime config', () => {
+  it('uses explicit Responses transport for an OpenAI-compatible scoped proxy', () => {
+    const output = buildOpenCodeByokProviderConfig(
+      { protocol: 'openai', apiKey: 'scoped-token', baseUrl: 'http://model-proxy:7458/v1' },
+      'gpt-model',
+      { openaiWireApi: 'responses' },
+    );
+    expect(output?.config).toMatchObject({ provider: { [BYOK_OPENCODE_PROVIDER_ID]: {
+      npm: '@ai-sdk/openai', options: { baseURL: 'http://model-proxy:7458/v1' },
+    } } });
+    expect(output?.env).toEqual({ [BYOK_OPENCODE_API_KEY_ENV]: 'scoped-token' });
+  });
+
   it('gates non-interactive permission bypass on the installed OpenCode capability', () => {
     agentCapabilities.delete('byok-opencode');
     expect(byokOpenCodeAgentDef.helpArgs).toEqual(['run', '--help']);

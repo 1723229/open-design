@@ -19,6 +19,7 @@ import { connectorService } from '../connectors/service.js';
 import type { BoundedJsonObject, LiveArtifactRefreshErrorRecord, LiveArtifactRefreshSourceMetadata, LiveArtifactSource } from './schema.js';
 
 export interface RefreshLiveArtifactOptions {
+  allowSource?: (source: LiveArtifactSource) => boolean;
   projectsRoot: string;
   projectId: string;
   artifactId: string;
@@ -76,12 +77,14 @@ function hasRefreshPermission(source: LiveArtifactSource): boolean {
 }
 
 async function executeRefreshSource(options: {
+  allowSource?: (source: LiveArtifactSource) => boolean;
   projectsRoot: string;
   projectId: string;
   source: LiveArtifactSource;
   signal: AbortSignal;
 }): Promise<BoundedJsonObject> {
   const { projectsRoot, projectId, source, signal } = options;
+  if (options.allowSource && !options.allowSource(source)) throw new LiveArtifactRefreshUnavailableError('This refresh source is not available');
   if (source.type === 'connector_tool') {
     const connector = source.connector;
     if (connector === undefined) throw new Error('connector refresh source requires connector metadata');
@@ -186,6 +189,7 @@ export async function refreshLiveArtifact(options: RefreshLiveArtifactOptions): 
                   projectsRoot: options.projectsRoot,
                   projectId: options.projectId,
                   source: documentSource,
+                  ...(options.allowSource ? {allowSource:options.allowSource} : {}),
                   signal,
                 }),
               );

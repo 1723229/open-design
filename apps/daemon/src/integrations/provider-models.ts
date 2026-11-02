@@ -12,10 +12,13 @@ import { isLoopbackApiHost } from '@open-design/contracts/api/connectionTest';
 import { redactSecrets, validateUserProviderBaseUrl } from '../connectionTest.js';
 import { googleProviderModelsUrl, normalizeGoogleModelId } from './google-models.js';
 import { aihubmixHeaders, aihubmixCatalogUrl, parseAIHubMixCatalog } from './aihubmix.js';
+import { readProviderResponse } from './provider-response.js';
 
 type ProviderModelsInput = ProviderModelsRequest & {
   signal?: AbortSignal;
   requestInit?: Pick<RequestInit, 'dispatcher'>;
+  fetchImpl?: typeof fetch | undefined;
+  maxResponseBytes?: number;
 };
 
 const PROVIDER_MODELS_TIMEOUT_MS = 12_000;
@@ -85,8 +88,9 @@ function uniqueModels(models: ProviderModelOption[]): ProviderModelOption[] {
   const seen = new Set<string>();
   const out: ProviderModelOption[] = [];
   for (const model of models) {
+    if (/[\x00-\x1f\x7f]/.test(model.id)) continue;
     const id = model.id.trim();
-    if (!id || seen.has(id)) continue;
+    if (!id || id.length > 512 || seen.has(id)) continue;
     seen.add(id);
     const label = model.label.trim() || id;
     out.push({ ...model, id, label });
@@ -345,7 +349,7 @@ export async function listProviderModels(
   const timer = setTimeout(() => controller.abort(), PROVIDER_MODELS_TIMEOUT_MS);
 
   try {
-    const response = await fetch(url, {
+    const response = await (input.fetchImpl ?? fetch)(url, {
       method: 'GET',
       headers: providerModelsHeaders(input.protocol, input.apiKey),
       ...input.requestInit,
@@ -353,7 +357,8 @@ export async function listProviderModels(
       redirect: 'error',
     });
     const latencyMs = Date.now() - start;
-    const rawText = await response.text();
+    let rawText = '';
+    await readProviderResponse(response, controller.signal, input.maxResponseBytes ?? 8 * 1024 * 1024, chunk => { rawText += chunk; return false; });
     let data: unknown = {};
     let parseError: string | undefined;
     try {

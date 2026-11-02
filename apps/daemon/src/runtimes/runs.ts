@@ -764,6 +764,7 @@ export function createChatRunService({
   // Test seam for deterministic storage-failure coverage. Production callers
   // use the atomic writer above; the result carries only a bounded error type.
   writeDurableState = atomicWriteJson,
+  preserveQueuedRun = null,
 }) {
   const observeDiagnosticLifecycle = (run, kind, at, errorType = undefined) => {
     try { onDiagnosticLifecycle?.(run, kind, at, errorType); } catch { /* optional evidence only */ }
@@ -849,14 +850,15 @@ export function createChatRunService({
     if (!state || state.id !== id) return null;
     const eventsLogPath = path.join(runsLogDir, id, 'events.jsonl');
     const events = readDurableRunEvents(eventsLogPath);
-    const interruptedAfterRestart = interruptDurableRunAfterDaemonRestart(
+    const preserveQueued = state.status === 'queued' && preserveQueuedRun?.(id) === true;
+    const interruptedAfterRestart = !preserveQueued && interruptDurableRunAfterDaemonRestart(
       state,
       Date.now(),
       lastRecordedRunActivityAt(state, events),
     );
     if (interruptedAfterRestart) writeDurableState(statePath, state);
-    backfillDurableTerminal(state);
-    if (!TERMINAL_RUN_STATUSES.has(state.status)) return null;
+    if (!preserveQueued) backfillDurableTerminal(state);
+    if (!preserveQueued && !TERMINAL_RUN_STATUSES.has(state.status)) return null;
     if (
       interruptedAfterRestart
       || state.terminalRecoveryReason === 'daemon_restart'
@@ -2549,8 +2551,10 @@ export function createChatRunService({
     return finishCanceledFromChildState(run, termination.forced ? 'SIGKILL' : 'SIGTERM');
   };
 
-  const shutdownActive = async ({ graceMs = shutdownGraceMs } = {}) => {
-    const activeRuns = Array.from(runs.values()).filter((run) => !TERMINAL_RUN_STATUSES.has(run.status));
+  const shutdownActive = async ({ graceMs = shutdownGraceMs, preserveQueuedRun: preserveQueuedOnShutdown = preserveQueuedRun } = {}) => {
+    const activeRuns = Array.from(runs.values()).filter((run) =>
+      !TERMINAL_RUN_STATUSES.has(run.status)
+      && !(run.status === 'queued' && preserveQueuedOnShutdown?.(run.id) === true));
     await Promise.all(activeRuns.map(async (run) => {
       run.cancelRequested = true;
       run.cancelOrigin = 'daemon_shutdown';

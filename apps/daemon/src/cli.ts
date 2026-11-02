@@ -34,6 +34,7 @@ import {
 } from './mcp-agent-install.js';
 import { resolveMcpWorkspaceContext } from './mcp-workspace-context.js';
 import { parseStockSearchRequest, type StockSearchResponse } from '@open-design/contracts';
+import { installCompanyCliFetch, runCompanyCli } from './company/cli.js';
 
 const argv = process.argv.slice(2);
 
@@ -408,6 +409,7 @@ const PLUGIN_LIST_BOOLEAN_FLAGS = new Set([
 ]);
 
 const SUBCOMMAND_MAP = {
+  company: async (args) => { process.exitCode = await runCompanyCli(args); },
   agent: runAgent,
   artifacts: runArtifacts,
   media: runMedia,
@@ -1037,6 +1039,8 @@ async function runLint(args) {
   if (failed) process.exitCode = 1;
 }
 
+if (argv[0] === 'tools' || (argv[0] === 'mcp' && argv[1] === 'live-artifacts')) await installCompanyCliFetch(argv);
+
 if (argv[0] === 'mcp' && argv[1] === 'live-artifacts') {
   try {
     const { exitCode } = await runLiveArtifactsMcpServer();
@@ -1052,6 +1056,7 @@ const first = argv.find((a) => !a.startsWith('-'));
 if (first && SUBCOMMAND_MAP[first]) {
   const idx = argv.indexOf(first);
   const rest = [...argv.slice(0, idx), ...argv.slice(idx + 1)];
+  if (first !== 'company') await installCompanyCliFetch(rest);
   await SUBCOMMAND_MAP[first](rest);
   // Respect a non-zero exit code a handler set via process.exitCode (e.g. a
   // failed `od resource get`); default to 0 when it left it unset.

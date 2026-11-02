@@ -600,6 +600,8 @@ export interface RegisterRunRoutesDeps {
     getAgentDef: (agentId: string) => RuntimeAgentDef | null | undefined;
   };
   chat: {
+    onRunAdmissionSettled?: (req: Request) => void;
+    dispatchCompanyRun?: (req: Request, meta: RunCreateMeta, run: ChatRun) => Promise<unknown>;
     startChatRun: (meta: RunCreateMeta, run: ChatRun) => Promise<unknown>;
     prepareOdNextInitialPromptBundle?: (input: {
       meta: RunCreateMeta;
@@ -1409,7 +1411,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
     }
   }
 
-  const handleRunCreate = async (req: ApiRequest, res: ApiResponse, stream = false) => {
+  const prepareRunCreate = async (req: ApiRequest, res: ApiResponse, stream = false) => {
     if (ctx.lifecycle.isDaemonShuttingDown()) {
       return sendApiError(res, 503, 'UPSTREAM_UNAVAILABLE', 'daemon is shutting down');
     }
@@ -2849,6 +2851,17 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       });
     }
     if (strategyTask) run.strategyTask = strategyTask;
+    const executionMeta: RunCreateMeta = {
+      ...meta,
+      ...(requestBody.byokProvider !== undefined
+        ? { byokProvider: requestBody.byokProvider }
+        : {}),
+    };
+    if (ctx.chat.dispatchCompanyRun) {
+      // Persist admission before acknowledging the request. The dispatcher
+      // owns execution and all following physical runs for this logical turn.
+      await ctx.chat.dispatchCompanyRun(req, executionMeta, run);
+    }
     const body = {
       userSubmission: acceptedSubmission(),
       runId: run.id,
@@ -2891,12 +2904,6 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
         console.warn('[plugins] skill candidate hook setup failed', err);
       }
     }
-    const executionMeta: RunCreateMeta = {
-      ...meta,
-      ...(requestBody.byokProvider !== undefined
-        ? { byokProvider: requestBody.byokProvider }
-        : {}),
-    };
     internalRuns.start(
       run,
       {
@@ -2913,10 +2920,16 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
         resumed,
         attributionMismatch: analyticsAttributionMismatch,
       },
-      () => startChatRun(executionMeta, run),
+      () => ctx.chat.dispatchCompanyRun
+        ? Promise.resolve()
+        : startChatRun(executionMeta, run),
     );
   };
 
+  const handleRunCreate = async (req: ApiRequest, res: ApiResponse, stream = false) => {
+    try { return await prepareRunCreate(req, res, stream); }
+    finally { ctx.chat.onRunAdmissionSettled?.(req); }
+  };
   registerRunCreateRoute(app, handleRunCreate, sendApiError);
 
   // Restart-safety probe for the desktop updater. `GET /api/runs` refuses an

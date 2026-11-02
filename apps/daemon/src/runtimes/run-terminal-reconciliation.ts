@@ -173,6 +173,7 @@ interface ReconciliationOptions {
     now: number,
   ) => Partial<DurableRunState> | null;
   finalizeTerminalLocally?: (run: DurableRunState, status: string, terminalAt: number) => void;
+  preserveQueuedRun?: (runId: string) => boolean;
 }
 
 function replayStorageProperties(
@@ -398,6 +399,14 @@ export async function reconcileDurableRunTerminals(
     }))
     .filter((entry): entry is { filePath: string; state: DurableRunState } => entry.state !== null);
   result.scanned = states.length;
+  const preservedQueuedRunIds = new Set<string>();
+  states = states.filter(({ state }) => {
+    if (state.status === 'queued' && options.preserveQueuedRun?.(state.id)) {
+      preservedQueuedRunIds.add(state.id);
+      return false;
+    }
+    return true;
+  });
   const now = Date.now();
   const reconciliationGenerationId = randomUUID();
   const interruptedRunIds = new Set<string>();
@@ -413,7 +422,7 @@ export async function reconcileDurableRunTerminals(
     writeState(entry.filePath, entry.state);
   }
 
-  const deferredRunIds = new Set<string>();
+  const deferredRunIds = new Set<string>(preservedQueuedRunIds);
   if (options.recoverBeforeInterrupt) {
     const originalStates = new Map(states.map(entry => [entry.state.id, entry.state]));
     states = states.filter(entry => {

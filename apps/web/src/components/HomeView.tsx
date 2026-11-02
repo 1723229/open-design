@@ -1,3 +1,4 @@
+import { useCompany } from '../company/CompanyProvider';
 // Composed Home view — the top-down layout the entry view renders
 // when the left nav rail's "Home" tab is active.
 //
@@ -268,6 +269,7 @@ const AUTHORING_DEFAULT_SCENARIO_INPUTS = {
 
 
 interface Props {
+  aihubmixConfigured?: boolean;
   isActive?: boolean;
   projects: Project[];
   projectsLoading?: boolean;
@@ -508,6 +510,7 @@ export function HomeView({
   designSystems = EMPTY_DESIGN_SYSTEMS,
   designSystemsLoading = false,
   defaultDesignSystemId = null,
+  aihubmixConfigured = false,
   onSubmit,
   onSubmitWithDraftGuard,
   onOpenProject,
@@ -533,6 +536,7 @@ export function HomeView({
   deepSeekV4FlashCampaignInstallationId = null,
   variant = 'page',
 }: Props) {
+  const company = useCompany();
   const { locale, t } = useI18n();
   const analytics = useAnalytics();
   // The localStorage draft is keyed per surface, not per instance, so only ONE
@@ -708,6 +712,7 @@ export function HomeView({
   // whenever the user picks a folder.
   const [recentDirs, setRecentDirs] = useState<string[]>([]);
   useEffect(() => {
+      if (company.isMember) return;
     let cancelled = false;
     void fetchRecentLinkedDirs().then((dirs) => {
       if (!cancelled) setRecentDirs(dirs);
@@ -848,7 +853,7 @@ export function HomeView({
   const [elevenLabsVoicesLoading, setElevenLabsVoicesLoading] = useState(false);
   // Live AIHubMix image catalogue merged into the home media composer's model
   // picker (replaces the static aihubmix seeds when the fetch resolves).
-  const aihubmixImageModels = useAIHubMixImageModels();
+  const aihubmixImageModels = useAIHubMixImageModels(!company.enabled || (!company.isMember && aihubmixConfigured && active?.projectKind === 'image'));
   const composerImageModels = useMemo(
     () => mergeAihubmixImageModels(IMAGE_MODELS, aihubmixImageModels),
     [aihubmixImageModels],
@@ -1042,6 +1047,7 @@ export function HomeView({
   });
 
   useEffect(() => {
+      if (company.isMember) { setMcpLoading(false); return; }
     let cancelled = false;
     void fetchMcpServers().then((result) => {
       if (cancelled) return;
@@ -3232,8 +3238,8 @@ export function HomeView({
         error={error}
         workingDir={workingDir}
         recentDirs={recentDirs}
-        onPickWorkingDir={handlePickWorkingDir}
-        onPickLocalCodeDir={handlePickLocalCodeDir}
+        onPickWorkingDir={company.enabled ? undefined : handlePickWorkingDir}
+        onPickLocalCodeDir={company.enabled ? undefined : handlePickLocalCodeDir}
         onSelectRecentWorkingDir={(dir) => {
           setWorkingDir(dir);
           // Recents come from the browser-side picker only; they carry no

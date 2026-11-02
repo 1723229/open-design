@@ -1,3 +1,5 @@
+import { useCompany } from '../company/CompanyProvider';
+import { CompanySharingDialog } from '../company/CompanyControls';
 import { SHOW_OFFICIAL_CLOUD } from '../product';
 import { validateCommentSaveTarget } from '../comments/validate-save-target';
 import { previewStorageKey, readPreviewStorage, savePreviewStorageMessage } from '../runtime/preview-storage';
@@ -209,6 +211,7 @@ import {
   exportProjectImageDataUrl,
   exportProjectScreenshotPdf,
   exportSnapshotAsPdf,
+  downloadProjectArchive,
   exportReactComponentAsHtml,
   exportReactComponentAsZip,
   captureHostIframeSnapshot,
@@ -6788,6 +6791,7 @@ function ReactComponentViewer({
   viewerOnly?: boolean;
   workspaceActive?: boolean;
 }) {
+  const company = useCompany();
   const t = useT();
   const _analytics = useAnalytics();
   // `FileWorkspace` keeps a non-active viewer mounted, so an in-flight publish
@@ -6891,6 +6895,7 @@ function ReactComponentViewer({
   }, [shareAccess]);
 
   useEffect(() => {
+    if (company.enabled) return;
     let cancelled = false;
     let refreshSeq = 0;
     const refreshShareAccess = (event?: Event) => {
@@ -6905,7 +6910,7 @@ function ReactComponentViewer({
       cancelled = true;
       window.removeEventListener(TEAM_PROJECTS_CHANGED_EVENT, refreshShareAccess);
     };
-  }, [projectId, shareMenuOpen, workspaceContext]);
+  }, [projectId, shareMenuOpen, workspaceContext, company.enabled]);
 
   useEffect(() => {
     // A Share popover must not outlive the standalone-file classification it
@@ -7355,6 +7360,7 @@ function HtmlViewer({
   ) => void;
   manualEditEntryAllowed?: boolean;
 }) {
+  const company = useCompany();
   const { locale, t } = useI18n();
   const iframeKeepAlivePool = useIframeKeepAlivePool();
   // Retained viewers prewarm new file revisions behind the active tab. Keeping
@@ -7973,6 +7979,7 @@ function HtmlViewer({
   }, [shareAccess, workspaceActive]);
 
   useEffect(() => {
+    if (company.enabled) return;
     if (!workspaceActive) return;
     let cancelled = false;
     let refreshSeq = 0;
@@ -7988,7 +7995,7 @@ function HtmlViewer({
       cancelled = true;
       window.removeEventListener(TEAM_PROJECTS_CHANGED_EVENT, refreshShareAccess);
     };
-  }, [projectId, deployMenuOpen, workspaceActive, workspaceContext]);
+  }, [projectId, deployMenuOpen, workspaceActive, workspaceContext, company.enabled]);
 
   // Collapse the nested workspace-access listbox whenever the unified share
   // popover itself closes, so it never re-opens mid-flight.
@@ -9732,6 +9739,7 @@ function HtmlViewer({
   const suppressLiveReloadUntilRef = useRef(0);
   const [exportToast, setExportToast] = useState<ExportToastState | null>(null);
   const [shareLinkFeedback, setShareLinkFeedback] = useState<'copied' | 'failed' | null>(null);
+  const [companyShareOpen, setCompanyShareOpen] = useState(false);
   // Item 5 (2026 refactor): tone travels with the message now, so this can
   // route through ShareFeedbackToast (success/error) instead of the generic
   // Toast — the workspace-share success/failure copy below was always one
@@ -10274,6 +10282,7 @@ function HtmlViewer({
   ]);
 
   useEffect(() => {
+    if (company.isMember) return;
     if (!workspaceActive) return;
     const requestSeq = ++deploymentsLoadSeqRef.current;
     let cancelled = false;
@@ -10300,6 +10309,7 @@ function HtmlViewer({
   // the shared sequence fence prevents an older identity-load response from
   // overwriting this newer snapshot.
   useEffect(() => {
+    if (company.isMember) return;
     if (!deployMenuOpen) return;
     const requestSeq = ++deploymentsLoadSeqRef.current;
     let cancelled = false;
@@ -15921,6 +15931,10 @@ function HtmlViewer({
      * 在消费之前检查分享资格，避免只读状态吞掉请求。
      */
     if (!shouldConsumeActionRequest(actionRequestKey('share', projectId, file.name), nonce)) return;
+    if (company.enabled) {
+      setCompanyShareOpen(true);
+      return;
+    }
     setExportReadyNudge(false);
     markExportReadyNudgeSeen(projectId, file.name);
     /*
@@ -15939,6 +15953,7 @@ function HtmlViewer({
   }, [
     shareRequest?.nonce,
     shareRequest?.anchorId,
+    company.enabled,
     canShare,
     projectId,
     file.name,
@@ -15959,7 +15974,8 @@ function HtmlViewer({
     setExportReadyNudge(false);
     markExportReadyNudgeSeen(projectId, file.name);
     /* 与分享同一条路,换成导出菜单。 */
-    const nextAnchorId = downloadRequest?.anchorId ?? null;
+    // Opening a file may scroll an older card out of view; keep its menu usable.
+    const nextAnchorId = company.enabled ? null : downloadRequest?.anchorId ?? null;
     const wasOpenOnThisEntry = deployMenuOpen
       && unifiedActionTab === 'export'
       && menuAnchorId === nextAnchorId;
@@ -15970,6 +15986,7 @@ function HtmlViewer({
   }, [
     downloadRequest?.nonce,
     downloadRequest?.anchorId,
+    company.enabled,
     canDownload,
     projectId,
     file.name,
@@ -16029,7 +16046,10 @@ function HtmlViewer({
       return !(wasOpenOnThisSurface && unifiedActionTab === nextTab);
     });
   };
-  const openShareMenu = () => openUnifiedActionMenu('share', 'share_dropdown');
+  const openShareMenu = () => {
+    if (company.enabled) setCompanyShareOpen(true);
+    else openUnifiedActionMenu('share', 'share_dropdown');
+  };
   const openDownloadMenu = () => openUnifiedActionMenu('export', 'download_dropdown');
   const captureExportImageSnapshot = useCallback(async (
     options?: { wholeDeck?: boolean; context?: HtmlVersionExportContext | null },
@@ -17280,6 +17300,7 @@ function HtmlViewer({
 
   return (
     <div ref={viewerRootRef} className={`viewer html-viewer${inTabPresent ? ' is-tab-present' : ''}${viewerOnly ? ' html-viewer--viewer-only' : ''}`}>
+      {companyShareOpen && <CompanySharingDialog key={projectId} projectId={projectId} fileName={file.name} onClose={() => setCompanyShareOpen(false)} />}
       <div className="viewer-toolbar" style={workspaceActive ? undefined : { visibility: 'hidden' }}>
         <div className="viewer-toolbar-left">
           {showDeckThumbnailRail ? (
@@ -17790,23 +17811,24 @@ function HtmlViewer({
                     aria-haspopup="menu"
                     aria-expanded={deployMenuOpen && unifiedActionTab === 'export'}
                     aria-label={t('fileViewer.unifiedExportTab')}
-                    disabled={viewerOnly}
-                    title={viewerOnly ? viewerOnlyDisabledTitle : undefined}
-                    onClick={openDownloadMenu}
+                    data-artifact-anchor={SHOW_OFFICIAL_CLOUD && !company.enabled ? undefined : toolbarMenuAnchorId}
+                    disabled={viewerOnly && !company.enabled}
+                    title={company.enabled && viewerOnly ? t('common.exportZip') : viewerOnly ? viewerOnlyDisabledTitle : undefined}
+                    onClick={company.enabled && viewerOnly ? () => { void downloadProjectArchive({ projectId, fallbackTitle: projectName ?? file.name }); } : openDownloadMenu}
                   >
                     <RemixIcon name="download-line" size={15} />
                     <span>{t('fileViewer.unifiedExportTab')}</span>
                   </button>
                 ) : null}
-                  {SHOW_OFFICIAL_CLOUD ? <button
+                  {SHOW_OFFICIAL_CLOUD || company.enabled ? <button
                     type="button"
                     className={`chrome-action chrome-action-secondary chrome-action-with-label chrome-action-text-only chrome-action-unified ${shareEntryStyles.toolbar}`}
                     aria-haspopup="menu"
                     aria-expanded={deployMenuOpen && unifiedActionTab === 'share'}
-                    data-artifact-anchor={toolbarMenuAnchorId}
+                    data-artifact-anchor={company.enabled ? undefined : toolbarMenuAnchorId}
                     aria-label={shareMenuLabel}
-                    disabled={viewerOnly || !rawCanShare}
-                    title={viewerOnly ? viewerOnlyDisabledTitle : !rawCanShare || streaming ? shareUnavailableHint : undefined}
+                    disabled={(viewerOnly && !company.enabled) || !rawCanShare}
+                    title={viewerOnly && !company.enabled ? viewerOnlyDisabledTitle : !rawCanShare || streaming ? shareUnavailableHint : undefined}
                     onClick={openShareMenu}
                   >
                     {/* Owner C0: share the artifact card's forward-arrow glyph. */}

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatMessage, ProjectMediaTask } from '@open-design/contracts';
 import { ChatPane } from '../../src/components/ChatPane';
+import { CompanyProvider } from '../../src/company/CompanyProvider';
 
 const registryMocks = vi.hoisted(() => ({
   fetchProjectMediaTasks: vi.fn(),
@@ -50,9 +51,25 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('ChatPane media-task polling', () => {
+  it('does not request unsupported media tasks for a managed company member run', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      enabled: true, user: { id: 'member', username: 'Member', role: 'member', mustChangePassword: false }, csrfToken: 'token',
+      presentation: { showAgentIdentity: false, hiddenSettingsSections: [] },
+    })));
+    render(<CompanyProvider><ChatPane
+      messages={[{ id: 'assistant-company', role: 'assistant', content: '', createdAt: 1, runId: 'run-company', runStatus: 'running' }]}
+      streaming error={null} projectId="project-company" projectFiles={[]}
+      onEnsureProject={async () => 'project-company'} onSend={vi.fn()} onStop={vi.fn()}
+      conversations={[]} activeConversationId="conversation-company" onSelectConversation={vi.fn()} onDeleteConversation={vi.fn()}
+    /></CompanyProvider>);
+    await screen.findByTestId('composer');
+    expect(registryMocks.fetchProjectMediaTasks).not.toHaveBeenCalled();
+  });
+
   it('polls the latest streaming run before ACP emits its terminal media tool_use', async () => {
     registryMocks.fetchProjectMediaTasks.mockResolvedValue({
       tasks: [{

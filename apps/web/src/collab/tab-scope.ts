@@ -21,6 +21,8 @@ export interface TabScopeLoginStatus {
 export const UNSET_ACCOUNT_BUCKET = '__unset__';
 
 export interface TabIdentityScopeInputs {
+  /** Company sessions scope local tabs independently from cloud identities. */
+  companyUserId?: string;
   /** App.tsx's merged AMR login status, or `null` before the first read
    *  completes. */
   amrLoginStatus: TabScopeLoginStatus | null;
@@ -119,6 +121,10 @@ export interface TabIdentityScopeResult {
 export function deriveTabIdentityScope(
   inputs: TabIdentityScopeInputs,
 ): TabIdentityScopeResult {
+  if (inputs.companyUserId) {
+    const accountBucket = `company:${inputs.companyUserId}`;
+    return { scopeKey: `${accountBucket}::none`, nextWorkspaceBucket: 'none', nextAccountBucket: accountBucket };
+  }
   const {
     amrLoginStatus,
     workspaceContext,

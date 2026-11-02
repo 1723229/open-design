@@ -1,3 +1,4 @@
+import { useCompany } from '../company/CompanyProvider';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@open-design/components';
@@ -2669,10 +2670,12 @@ function MediaProjectOptions(props:
       onVoice: (value: string) => void;
     }
 ) {
+  const company = useCompany();
+  const loadCatalogue = !company.enabled || (!company.isMember && isStoredMediaProviderEntryPresent(props.mediaProviders?.aihubmix));
   const t = useT();
-  const aihubmixImageModels = useAIHubMixImageModels();
-  const aihubmixVideoModels = useAIHubMixVideoModels();
-  const aihubmixAudioModels = useAIHubMixAudioModels();
+  const aihubmixImageModels = useAIHubMixImageModels(loadCatalogue);
+  const aihubmixVideoModels = useAIHubMixVideoModels(loadCatalogue);
+  const aihubmixAudioModels = useAIHubMixAudioModels(loadCatalogue);
 
   if (props.surface === 'image') {
     return (

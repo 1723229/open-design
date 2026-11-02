@@ -273,7 +273,7 @@ describe('AssistantMessage feedback gate', () => {
     expect(container.textContent).toContain('Done.');
   });
 
-  it('shows the agent name again when it is not a continuation', () => {
+  it('retains the non-continuation state while the white-label identity header is hidden', () => {
     // 反面这一条是为了让上面那条**可证伪**:只断言「接续时为 true」的话,
     // 把这个属性写死成 true 也照样绿
     const { container } = render(
@@ -286,7 +286,7 @@ describe('AssistantMessage feedback gate', () => {
     );
 
     expect(container.querySelector('[data-continuation="false"]')).toBeTruthy();
-    expect(container.querySelector('[data-testid="assistant-role"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="assistant-role"]')).toBeNull();
   });
 
   it('copies the raw assistant markdown from the completion footer', async () => {

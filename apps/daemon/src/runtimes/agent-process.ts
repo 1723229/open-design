@@ -30,6 +30,8 @@ import { ChildProcess, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { prepareCompanyAgentBridge } from '../company/agent-bridge.js';
+import type { CompanyExecutionContext } from '../company/container-execution.js';
 import {
   captureProcessSnapshot,
   isProcessAlive,
@@ -241,6 +243,7 @@ function recordAgentProcessUntilGroupExits(child: ChildProcess, context: AgentPr
 export type AgentProcessStdin = 'pipe' | 'ignore' | { readonly prompt: string };
 
 export type SpawnAgentProcessRequest = {
+  company?: CompanyExecutionContext;
   command: string;
   args: readonly string[];
   env: NodeJS.ProcessEnv;
@@ -274,6 +277,20 @@ export type SpawnedAgentProcess = {
  * tree.
  */
 export function spawnAgentProcess(request: SpawnAgentProcessRequest): SpawnedAgentProcess {
+  if (request.company) {
+    const bridge = prepareCompanyAgentBridge(request);
+    try {
+      const spawned = spawnLocalAgentProcess(bridge.request);
+      spawned.child.once('close', bridge.cleanup);
+      spawned.child.once('error', bridge.cleanup);
+      return spawned;
+    } catch (error) { bridge.cleanup(); throw error; }
+  }
+  if (process.env.OD_COMPANY_MODE === '1') throw new Error('Company agent execution requires an isolated job context');
+  return spawnLocalAgentProcess(request);
+}
+
+function spawnLocalAgentProcess(request: SpawnAgentProcessRequest): SpawnedAgentProcess {
   const detached = process.platform !== 'win32';
   const staged = typeof request.stdin === 'object'
     ? openCompletePromptAsStdin(request.runDir, request.stdin.prompt)

@@ -525,6 +525,19 @@ import { renderDesignSystemPreview } from './design-systems/preview.js';
 import { renderDesignSystemShowcase } from './design-systems/showcase.js';
 import { createChatRunService } from './runtimes/runs.js';
 import { reapLeftoverAgentProcesses, spawnAgentProcess } from './runtimes/agent-process.js';
+import { initializeCompany } from './company/routes.js';
+import { createCompanyModelAdmissionHolds, installCompanyHttpPolicy } from './company/http-policy.js';
+import { CompanyModelSettings } from './company/model-settings.js';
+import { createNativeCompanyModelProbe } from './company/native-model-probe.js';
+import { registerCompanyModelRoutes } from './company/model-routes.js';
+import type { CompanyModelRoute } from '@open-design/contracts';
+import { resolveCompanyInputPaths } from './company/input-paths.js';
+import { companyProjectEnvironment, companyProjectHome } from './company/container-execution.js';
+import { CompanyJobQueue } from './company/job-queue.js';
+import { CompanyDispatcher } from './company/dispatcher.js';
+import { cancelCompanyJob } from './company/agent-bridge.js';
+import { registerCompanyModelLease, revokeCompanyModelLease } from './company/model-proxy.js';
+import { cancelStrategyTaskExecution } from './strategies/task-store.js';
 import {
   createAmrTerminalReportDeliveryService,
   createAmrTerminalReportFinalizer,
@@ -2658,6 +2671,7 @@ function createProjectPreviewScopeRegistry() {
       // the iframe reloads. The host only needs this as the seed for its first
       // renewal — every renewal after that is driven by the renew response.
       documentExpiresAt: expiresAt,
+      ownerKey: options.ownerKey ?? '',
     });
     return scope;
   }
@@ -2691,6 +2705,7 @@ function createProjectPreviewScopeRegistry() {
         // that teardown blank a preview that is still using it.
         if (entry.reusable !== true) continue;
         if (entry.projectId !== wantedProject) continue;
+        if ((entry.ownerKey ?? '') !== (options.ownerKey ?? '')) continue;
         const entryWorkspace = entry.workspace
           ? `${entry.workspace.workspaceId}\u0000${entry.workspace.workspaceMemberId}`
           : '';
@@ -2708,6 +2723,10 @@ function createProjectPreviewScopeRegistry() {
     },
     revoke(scope) {
       scopes.delete(String(scope || ''));
+    },
+    ownerKey(projectId, scope) {
+      const entry = scopes.get(String(scope || ''));
+      return entry && entry.projectId === String(projectId) && entry.expiresAt > Date.now() ? entry.ownerKey : undefined;
     },
     /**
      * The expiry to embed in a served document. Stable for the scope's whole
@@ -2745,6 +2764,7 @@ function createProjectPreviewScopeRegistry() {
         return undefined;
       }
       if (entry.projectId !== String(projectId)) return undefined;
+      if ((entry.ownerKey ?? '') !== (options.ownerKey ?? '')) return undefined;
       entry.expiresAt = Date.now() + (options.ttlMs ?? PROJECT_PREVIEW_SCOPE_TTL_MS);
       return entry.expiresAt;
     },
@@ -3583,6 +3603,77 @@ export async function startServer({
     previousLogPath: resolveDaemonPreviousLogPath(runtime),
   });
   const db = openDatabase(PROJECT_ROOT, { dataDir: RUNTIME_DATA_DIR });
+  let companyDispatcher: CompanyDispatcher | null = null;
+  let companyJobQueue: CompanyJobQueue | null = null;
+  let companyModels: CompanyModelSettings | undefined;
+  const companyModelAdmissions = createCompanyModelAdmissionHolds();
+  const companyQueuedRunIds = new Set<string>();
+  const companyToolTokensByJob = new Map<string, string>();
+  const company = await initializeCompany({
+    dataRoot: RUNTIME_DATA_DIR,
+    database: db,
+    resolveRunProjectId: (id) => design.runs.get(id)?.projectId ?? null,
+    resolvePreviewOwner: (req) => {
+      if (!['GET','HEAD'].includes(req.method)) return null;
+      const preview = parseProjectPreviewAssetPath(req.path.replace(/^\/api/u,''));
+      const ownerKey = preview ? projectPreviewScopes.ownerKey(preview.projectId,preview.scope) : null;
+      return preview && ownerKey ? {projectId:preview.projectId,ownerKey} : null;
+    },
+    authenticateTask: (req) => {
+      const token = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+      if (!token || !companyDispatcher || !companyJobQueue) return null;
+      for (const job of companyJobQueue.list().filter((job) => job.state === 'running')) {
+        const execution = companyDispatcher.executionForProject(job.projectId);
+        if (execution?.jobId === job.id && execution.token === token && execution.expiresAt > Date.now()) return {
+          userId: job.userId, projectId: job.projectId, legacyToolToken: companyToolTokensByJob.get(job.id),
+        };
+      }
+      return null;
+    },
+  });
+  if (process.env.OD_COMPANY_MODE === '1' && !company.enabled) throw new Error('Company deployment requires enabled company authentication');
+  if (company.enabled) {
+    companyJobQueue = new CompanyJobQueue(db, {
+      global: Number(process.env.OD_COMPANY_MAX_JOBS ?? 12),
+      perUser: Number(process.env.OD_COMPANY_MAX_JOBS_PER_USER ?? 3), perProject: 1,
+    });
+    for (const job of companyJobQueue.list().filter((job) => job.state === 'queued')) {
+      if (typeof job.payload.runId === 'string') companyQueuedRunIds.add(job.payload.runId);
+    }
+    const { OD_COMPANY_PROXY_URL: proxyUrl, OD_COMPANY_PROXY_CONTROL_SECRET: proxySecret,
+      OD_COMPANY_EXECUTOR_URL: executorUrl, OD_COMPANY_EXECUTOR_SECRET: executorSecret } = process.env;
+    companyModels = new CompanyModelSettings(RUNTIME_DATA_DIR, {
+      ...(proxyUrl && proxySecret && executorUrl && executorSecret ? {
+        nativeProbe: createNativeCompanyModelProbe({dataRoot:RUNTIME_DATA_DIR,proxyUrl,proxySecret,executorUrl,executorSecret}),
+      } : {}),
+      legacy: readAppConfigSync(RUNTIME_DATA_DIR),
+      retainedRoutes: () => [
+        ...companyModelAdmissions.routes.values(),
+        ...(companyJobQueue?.list() ?? [])
+          .filter(job => job.state === 'queued' || job.state === 'running')
+          .flatMap(job => {
+            const route = (job.payload.meta as { companyModelRoute?: CompanyModelRoute } | undefined)?.companyModelRoute;
+            return route ? [route] : [];
+          }),
+      ],
+    });
+  }
+  app.use(company.middleware);
+  app.use(company.router);
+  installCompanyHttpPolicy(app, {
+    company,
+    readConfig: () => readAppConfig(RUNTIME_DATA_DIR),
+    detectAgents,
+    models: companyModels,
+    holdModelRoute: companyModelAdmissions.holdModelRoute,
+    resolveProjectRoot: (id) => resolveProjectDir(PROJECTS_DIR, id, getProject(db, id)?.metadata),
+    projectIsExecuting: (id) => companyJobQueue?.list().some((job) => job.projectId === id && job.state === 'running') ?? false,
+  });
+  if (companyModels) registerCompanyModelRoutes(app, {
+    company,
+    models: companyModels,
+    detectAgents: () => detectAgents(readAppConfigSync(RUNTIME_DATA_DIR).agentCliEnv ?? {}),
+  });
   daemonHealth?.setStorageProbe(() => readSqlitePageStats({ db, file: db.name }));
   const amrTerminalReportOutbox = createAmrTerminalReportOutboxStore(db);
   // P0-24 N10: notices for turns that end while this process runs (never replayed).
@@ -8417,6 +8508,7 @@ export async function startServer({
   const codexThreadCleanupOwner = createCodexThreadCleanupOwner();
   const design = {
     runs: createChatRunService({
+      preserveQueuedRun: (id) => companyQueuedRunIds.has(id),
       createSseResponse,
       createSseErrorPayload,
       runsLogDir: path.join(RUNTIME_DATA_DIR, 'runs'),
@@ -8681,6 +8773,7 @@ export async function startServer({
   // Langfuse terminal work whose checkpoint was not committed. Network work
   // stays off the startup critical path.
   void reconcileDurableRunTerminals({
+    preserveQueuedRun: (id) => companyQueuedRunIds.has(id),
     analytics: analyticsService,
     appVersion: currentAppVersion(),
     appVersionInfo: currentAppVersionInfo(),
@@ -8971,7 +9064,13 @@ export async function startServer({
     isProjectReceivingContent: (projectId) => ownedContentSync?.isApplying(projectId) ?? false,
     sendApiError,
   });
-  const authorizeProjectRequest = process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela'
+  const authorizeProjectRequest = company.enabled
+    ? async (req, res, projectId, options) => {
+        if (company.canAccess(company.getUser(req), projectId, options.mode === 'write')) return true;
+        sendApiError(res, 403, 'PROJECT_ACCESS_DENIED', '无权访问此项目');
+        return false;
+      }
+    : process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela'
     ? createVerifiedProjectRequestAuthority({
         localAuthority: localProjectRequestAuthority,
         getBinding: (projectId) => getWorkspaceProjectByProjectId(db, projectId),
@@ -9006,6 +9105,18 @@ export async function startServer({
     options,
     runId,
   ) => {
+    if (company.enabled) {
+      const execution = companyDispatcher?.executionForProject(projectId);
+      const job = execution ? companyJobQueue?.get(execution.jobId) : null;
+      const run = design.runs.get(runId);
+      const write = options?.mode === 'write';
+      if (!job || job.state !== 'running' || !run || run.projectId !== projectId
+        || !company.canAccess(company.store.getUser(job.userId), projectId, write)) {
+        sendApiError(res, 403, 'COMPANY_PROJECT_PERMISSION_DENIED', 'Task project access is no longer valid');
+        return null;
+      }
+      return { workspace: null };
+    }
     const binding = getWorkspaceProjectByProjectId(db, projectId);
     const run = binding?.workspaceId ? design.runs.get(runId) : null;
     if (binding?.workspaceId && (!run || run.projectId !== projectId)) {
@@ -9201,7 +9312,7 @@ export async function startServer({
     createLiveArtifact,
     listLiveArtifacts,
     updateLiveArtifact,
-    refreshLiveArtifact,
+    refreshLiveArtifact: (options) => refreshLiveArtifact({ ...options, ...(company.enabled ? {allowSource: (source) => source.type !== 'connector_tool' && source.toolName !== 'git.summary'} : {}) }),
     emitLiveArtifactEvent,
     emitLiveArtifactRefreshEvent,
     readLiveArtifactCode,
@@ -9365,6 +9476,7 @@ export async function startServer({
   });
   registerProjectRoutes(app, {
     db,
+    company,
     publicFileMutations,
     stopPublicFilesBeforeDelete,
     design,
@@ -9848,7 +9960,10 @@ export async function startServer({
   });
   registerLiveArtifactRoutes(app, {
     db,
-    http: httpDeps,
+    http: company.enabled ? {
+      ...httpDeps,
+      requireLocalDaemonRequest: (req,res,next) => company.getUser(req) ? next() : sendApiError(res,401,'AUTHENTICATION_REQUIRED','请先登录'),
+    } : httpDeps,
     paths: pathDeps,
     auth: authDeps,
     liveArtifacts: liveArtifactDeps,
@@ -9955,6 +10070,7 @@ export async function startServer({
     projectPreviewScopes,
   });
   registerProjectFileRoutes(app, {
+    company,
     db,
     isProjectEditingBusy: (projectId) => design.runs.list().some((run) =>
       run.projectId === projectId && !design.runs.isTerminal(run.status)),
@@ -10885,7 +11001,7 @@ export async function startServer({
     // empty; the composer drops the block on a falsy value.
     let memoryBody = '';
     try {
-      memoryBody = await composeMemoryBody(RUNTIME_DATA_DIR);
+      if (!company.enabled) memoryBody = await composeMemoryBody(RUNTIME_DATA_DIR);
     } catch (err) {
       console.warn('[memory] composeMemoryBody failed', err);
     }
@@ -10898,8 +11014,8 @@ export async function startServer({
     // semantics.
     let memoryHooks: { profile?: boolean; rewrite?: boolean; verify?: boolean } | undefined;
     try {
-      const memCfg = await readMemoryConfig(RUNTIME_DATA_DIR);
-      memoryHooks = {
+      const memCfg = company.enabled ? null : await readMemoryConfig(RUNTIME_DATA_DIR);
+      memoryHooks = company.enabled ? { profile: false, rewrite: false, verify: false } : {
         profile: memCfg.profileEnabled,
         rewrite: memCfg.rewriteEnabled,
         verify: memCfg.verifyEnabled,
@@ -11843,6 +11959,7 @@ export async function startServer({
     // turn's prompt. Failures are swallowed — memory is best-effort and
     // must never block the agent run.
     if (
+      !company.enabled &&
       (run.retryAttemptCount ?? 0) === 0 &&
       typeof message === 'string' &&
       message.trim().length > 0
@@ -11920,7 +12037,9 @@ export async function startServer({
         odNextTaskInputSnapshot = createOdNextRunInputProjection({
           descriptor: run.odNextTaskInputSnapshot,
           snapshotsRoot: path.join(RUNTIME_DATA_DIR, 'od-next-task-inputs'),
-          projectionsRoot: path.join(RUNTIME_DATA_DIR, 'od-next-run-inputs'),
+          projectionsRoot: company.enabled
+            ? path.join(companyProjectHome(RUNTIME_DATA_DIR, projectId), 'od-next-run-inputs')
+            : path.join(RUNTIME_DATA_DIR, 'od-next-run-inputs'),
           runId: run.id,
         });
       } catch (error) {
@@ -11938,7 +12057,9 @@ export async function startServer({
       );
     }
     const { safeImages, oversizedImages, failedImages } =
-      resolveSafePromptImagePaths(odNextTaskInputSnapshot ? [] : imagePaths);
+      company.enabled
+        ? { safeImages: resolveCompanyInputPaths({projectRoot: cwd, imagePaths: odNextTaskInputSnapshot ? [] : imagePaths}).imagePaths, oversizedImages: [], failedImages: [] }
+        : resolveSafePromptImagePaths(odNextTaskInputSnapshot ? [] : imagePaths);
     if (oversizedImages.length > 0) {
       return failRun(
         'BAD_REQUEST',
@@ -11951,7 +12072,17 @@ export async function startServer({
         'Failed to read one or more image attachments.',
       );
     }
-    const transportSourceImages = odNextTaskInputSnapshot?.imagePaths ?? safeImages;
+    let isolatedImages = safeImages;
+    if (company.enabled && !odNextTaskInputSnapshot && safeImages.length > 0) {
+      const imageDir = path.join(companyProjectHome(RUNTIME_DATA_DIR, projectId), 'attachments', run.id);
+      fs.mkdirSync(imageDir, { recursive: true, mode: 0o700 });
+      isolatedImages = safeImages.map((file, index) => {
+        const destination = path.join(imageDir, `${index}-${path.basename(file)}`);
+        fs.copyFileSync(file, destination);
+        return destination;
+      });
+    }
+    const transportSourceImages = odNextTaskInputSnapshot?.imagePaths ?? isolatedImages;
     const amrStagedImages =
       def.id === 'amr' && !odNextTaskInputSnapshot
         ? await stageAmrImagePaths(cwd ?? PROJECT_ROOT, safeImages, UPLOAD_DIR)
@@ -12050,6 +12181,8 @@ export async function startServer({
           ...(pluginGrantContext ?? {}),
         })
       : null;
+    const companyExecution = company.enabled ? companyDispatcher?.executionForProject(projectId) : null;
+    if (toolTokenGrant && companyExecution) companyToolTokensByJob.set(companyExecution.jobId, toolTokenGrant.token);
     if (toolTokenGrant && toolRunWorkspaceActor) {
       toolRunWorkspaceActors.set(runId, toolRunWorkspaceActor);
     }
@@ -12058,6 +12191,7 @@ export async function startServer({
       if (toolTokenRevoked || !toolTokenGrant) return;
       toolTokenRevoked = true;
       toolTokenRegistry.revokeToken(toolTokenGrant.token, reason);
+      if (companyExecution && companyToolTokensByJob.get(companyExecution.jobId) === toolTokenGrant.token) companyToolTokensByJob.delete(companyExecution.jobId);
       toolRunWorkspaceActors.delete(runId);
     };
     // The async startup phase below (compose prompt, prepare prompt file,
@@ -12075,7 +12209,7 @@ export async function startServer({
         activeChatRunHandles.delete(sinkRunId);
       };
     }
-    const runtimeToolPrompt = createAgentRuntimeToolPrompt(daemonUrl, toolTokenGrant);
+    const runtimeToolPrompt = createAgentRuntimeToolPrompt(company.enabled ? `${process.env.OD_COMPANY_PROXY_URL}/od` : daemonUrl, toolTokenGrant);
     const commentHint = renderCommentAttachmentHint(safeCommentAttachments);
 
     // Resolve external MCP config + stored OAuth tokens up-front so the
@@ -12683,6 +12817,13 @@ export async function startServer({
       configuredAgentEnv = agentCliEnvForAgent(appConfig.agentCliEnv, def.id);
     } catch {
       configuredAgentEnv = {};
+    }
+    if (company.enabled) {
+      if (!projectId || !companyDispatcher?.executionForProject(projectId)) {
+        return failRun('COMPANY_JOB_REQUIRED', 'Company execution requires an admitted project job');
+      }
+      fs.mkdirSync(companyProjectHome(RUNTIME_DATA_DIR, projectId), { recursive: true, mode: 0o700 });
+      configuredAgentEnv = companyDispatcher.scopedEnvironmentForProject(projectId, RUNTIME_DATA_DIR);
     }
     const requestedAmrModelActor = def.id === 'amr'
       ? authenticatedRunActor(process.env, configuredAgentEnv)
@@ -15411,6 +15552,7 @@ export async function startServer({
           : stdinMode,
         runDir: path.join(RUNTIME_DATA_DIR, 'runs', run.id),
         runId: run.id,
+        ...(company.enabled ? { company: companyDispatcher!.executionForProject(projectId) } : {}),
       });
       child = spawnedAgent.child;
       promptDeliveredAtSpawn = spawnedAgent.promptDeliveredAtSpawn;
@@ -15538,6 +15680,7 @@ export async function startServer({
     // produced empty extractions that, near-identical across a build's re-fires,
     // caused the same turn to be re-analyzed dozens of times.
     child.on('close', () => {
+      if (company.enabled) return;
       const userMsg = typeof message === 'string' ? message : '';
       // Forward the chat agent id so memory-llm.pickProvider can
       // constrain its auto-pick to the chat protocol's family — keeps
@@ -18011,6 +18154,132 @@ export async function startServer({
     }
   };
 
+  const pendingCompanyRuns = new Map();
+  if (company.enabled) {
+    const proxyOrigin = process.env.OD_COMPANY_PROXY_URL;
+    const proxySecret = process.env.OD_COMPANY_PROXY_CONTROL_SECRET;
+    if (!proxyOrigin || !proxySecret) throw new Error('Company model proxy configuration is required');
+    companyDispatcher = new CompanyDispatcher({
+      queue: companyJobQueue,
+      authorize: async (job) => {
+        const execution = companyDispatcher?.executionForProject(job.projectId);
+        if (execution?.jobId === job.id && execution.expiresAt <= Date.now()) return false;
+        return await company.auth.userEligible(job.userId) && company.canAccess(company.store.getUser(job.userId), job.projectId, true);
+      },
+      async createLease(job, token) {
+        const pinned = job.payload.meta?.companyModelRoute;
+        if (pinned) {
+          if (!companyModels) throw new Error('Company model settings are unavailable');
+          const route = companyModels.resolve(pinned);
+          await registerCompanyModelLease(proxyOrigin, proxySecret, {
+            id: job.id, token, projectId: job.projectId,
+            agentId: route.agentId, model: route.model, baseUrl: route.baseUrl, apiKey: route.apiKey,
+            maxTokens: route.maxTokens,
+            protocol: route.protocol === 'anthropic-messages' ? 'anthropic' : 'openai',
+            wireProtocol: route.protocol, expiresAt: Date.now() + 2 * 60 * 60 * 1000,
+          });
+          return { agentId: route.agentId, model: route.model, protocol: route.protocol };
+        }
+        const config = await readAppConfig(RUNTIME_DATA_DIR);
+        const meta = job.payload.meta;
+        const agentId = meta.agentId;
+        if (!['claude', 'codex', 'opencode', 'deepseek-harness'].includes(agentId)) throw new Error('Company agent is not installed');
+        const credentials = agentCliEnvForAgent(config.agentCliEnv, agentId);
+        const model = ['opencode', 'deepseek-harness'].includes(agentId)
+          ? String(meta.model).replace(/^[^/]+\//, '') : String(meta.model);
+        if (!model || model === 'default' || model === 'undefined') throw new Error('Company model must be explicitly configured');
+        const protocol = agentId === 'claude' ? 'anthropic' : 'openai';
+        const apiKey = agentId === 'claude'
+          ? credentials.ANTHROPIC_API_KEY || credentials.ANTHROPIC_AUTH_TOKEN
+          : agentId === 'deepseek-harness' ? credentials.DEEPSEEK_API_KEY : credentials.OPENAI_API_KEY;
+        let baseUrl = agentId === 'claude'
+          ? credentials.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1'
+          : agentId === 'deepseek-harness' ? credentials.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1'
+            : credentials.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+        if (!apiKey) throw new Error('Selected company agent has no configured provider credential');
+        if (new URL(baseUrl).pathname === '/') baseUrl = `${baseUrl.replace(/\/$/, '')}/v1`;
+        await registerCompanyModelLease(proxyOrigin, proxySecret, {
+          id: job.id, token, projectId: job.projectId, agentId, model, baseUrl, apiKey, protocol, expiresAt: Date.now() + 2 * 60 * 60 * 1000,
+        });
+        return { agentId, model };
+      },
+      async revokeLease(job) {
+        companyToolTokensByJob.delete(job.id);
+        try { await revokeCompanyModelLease(proxyOrigin, proxySecret, job.id); }
+        finally { await cancelCompanyJob(job.id); }
+      },
+      async start(job) {
+        let run = pendingCompanyRuns.get(job.id) ?? design.runs.get(job.payload.runId);
+        if (!run) throw new Error('Queued company run has no durable run record');
+        companyQueuedRunIds.delete(run.id);
+        pendingCompanyRuns.delete(job.id);
+        // Only a queued job is admitted here. Its logical id retains the
+        // immutable strategy mapping; a fresh physical child is created below.
+        if (design.runs.isTerminal(run.status) && run.errorCode === 'DAEMON_RESTARTED') {
+          design.runs.prepareRestart(run);
+          const claim = pinAssistantMessageOnRunCreate(db, run, {
+            isRunActive: (id) => { const candidate = design.runs.get(id); return candidate && !design.runs.isTerminal(candidate.status); },
+          });
+          if (!claim.ok) throw new Error('Unable to reclaim queued company assistant message');
+          reconcileAssistantMessageOnRunEnd(db, design.runs, run);
+        }
+        if (run.cancelRequested || design.runs.isTerminal(run.status)) return run.id;
+        fs.mkdirSync(companyProjectHome(RUNTIME_DATA_DIR, job.projectId), { recursive: true, mode: 0o700 });
+        void commentFilePublications.start(job.projectId, () => startChatRun(job.payload.meta, run))
+          .catch((error) => design.runs.fail(run, 'AGENT_EXECUTION_FAILED', error instanceof Error ? error.message : String(error)));
+        return run.id;
+      },
+      terminalState(job) {
+        const run = design.runs.get(job.runId ?? job.payload.runId);
+        if (!run) return 'failed';
+        const task = getStrategyTaskExecutionByRunId(db, run.id);
+        if (task) {
+          if (task.outcome === 'running') return null;
+          if (task.outcome === 'canceled') return 'cancelled';
+          if (task.outcome === 'completed') return 'completed';
+          const terminal = design.runs.get(task.terminalRunId ?? task.latestRunId);
+          return terminal?.status === 'succeeded' ? 'completed' : 'failed';
+        }
+        return run.status === 'succeeded' ? 'completed' : run.status === 'failed' ? 'failed' : run.status === 'canceled' ? 'cancelled' : null;
+      },
+      async cancel(job) {
+        const run = design.runs.get(job.runId ?? job.payload.runId);
+        const task = run ? getStrategyTaskExecutionByRunId(db, run.id) : null;
+        if (task?.outcome === 'running') {
+          cancelStrategyTaskExecution(db, { taskExecutionId: task.taskExecutionId, expectedRevision: task.revision });
+        }
+        if (task?.activeRunId) {
+          const active = design.runs.get(task.activeRunId);
+          if (active) await design.runs.cancel(active, 'permission_revoked');
+        } else if (run) await design.runs.cancel(run, 'permission_revoked');
+        await cancelCompanyJob(job.id);
+      },
+      onError(job, error) {
+        const run = design.runs.get(job.runId ?? job.payload.runId);
+        if (run && !design.runs.isTerminal(run.status)) design.runs.fail(run, 'COMPANY_EXECUTION_FAILED', error instanceof Error ? error.message : String(error));
+      },
+    });
+    company.onRevoke((event) => {
+      if (event.reason === 'logout') return;
+      for (const job of companyJobQueue.list(event.userId)) {
+        if (event.projectId && event.projectId !== job.projectId) continue;
+        if (event.reason === 'permissions' && company.canAccess(company.store.getUser(job.userId), job.projectId, true)) continue;
+        void companyDispatcher.cancel(job.id).catch(() => console.error('[company] unable to cancel revoked job'));
+      }
+    });
+  }
+  const dispatchCompanyRun = async (req, meta, run) => {
+    if (!company.enabled) return startChatRun(meta, run);
+    const user = company.getUser(req);
+    if (!user || !meta.projectId || !company.canAccess(user, meta.projectId, true)) throw new Error('Company project write permission required');
+    const result = companyDispatcher.dispatch({
+      userId: user.id, projectId: meta.projectId, clientRequestId: meta.clientRequestId || run.id,
+      payload: { meta, runId: run.id },
+    });
+    if (result.created) pendingCompanyRuns.set(result.job.id, run);
+    return result.job;
+  };
+
   orbitService.setRunHandler(async ({
     trigger,
     startedAt,
@@ -18200,7 +18469,7 @@ export async function startServer({
     http: httpDeps,
     paths: { BUNDLED_PLUGINS_DIR, PROJECTS_DIR, RUNTIME_DATA_DIR },
     agents: { detectAgents, getAgentDef },
-    chat: { prepareOdNextInitialPromptBundle, startChatRun },
+    chat: { prepareOdNextInitialPromptBundle, startChatRun, ...(company.enabled ? { dispatchCompanyRun, onRunAdmissionSettled: companyModelAdmissions.settleModelRoute } : {}) },
     lifecycle: { isDaemonShuttingDown: () => daemonShuttingDown },
     plugins: {
       connectorService,
@@ -18764,6 +19033,7 @@ export async function startServer({
   });
 
   registerStaticSpaFallback(app, staticDir);
+  if (companyDispatcher) await companyDispatcher.start();
 
   // Wait for `listen` to bind so callers always see the resolved URL —
   // critical when port=0 (ephemeral port) and when the embedding sidecar
@@ -18784,6 +19054,7 @@ export async function startServer({
     // work below.
     let messageEventPayloadHeal: MessageEventPayloadHealHandle | null = null;
     const cleanupDaemonBackgroundWork = () => {
+      companyDispatcher?.stop();
       stopDiagnosticConfigObserver();
       stopDiagnosticApiObserver();
       void automaticDiagnostics?.stop();
@@ -18814,11 +19085,15 @@ export async function startServer({
       if (daemonShutdownPromise) return daemonShutdownPromise;
       daemonShutdownPromise = (async () => {
         daemonShuttingDown = true;
+        companyDispatcher?.stop();
         await velaRoutesLifecycle.close();
         amrTerminalReportDelivery.stop();
         clearTerminalTelemetryFallbackTimers();
         const shutdownGraceMs = resolveChatRunShutdownGraceMs();
-        await design.runs.shutdownActive({ graceMs: shutdownGraceMs });
+        const preservedQueuedRunIds = new Set((companyJobQueue?.list() ?? [])
+          .filter((job) => job.state === 'queued')
+          .map((job) => job.payload.runId));
+        await design.runs.shutdownActive({ graceMs: shutdownGraceMs, preserveQueuedRun: (id) => preservedQueuedRunIds.has(id) });
         // Cleanup runs independently of user terminal classification. Give
         // confirmed closed writers at most three additional seconds at shutdown.
         const cleanupDrain = await codexThreadCleanupOwner.drain(shutdownGraceMs);

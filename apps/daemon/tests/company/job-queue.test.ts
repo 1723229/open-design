@@ -15,6 +15,20 @@ function queue(limits?: { global: number; perUser: number; perProject: number })
 afterEach(() => { for (const db of databases.splice(0)) db.close(); });
 
 describe('company logical turn queue', () => {
+  it('reports own active tasks and aggregate capacity without returning another user or execution secrets',()=>{
+    const q=queue({global:3,perUser:1,perProject:1});
+    const own=q.enqueue({userId:'a',projectId:'own',clientRequestId:'one',payload:{runId:'run-own',apiKey:'secret-never-return'}}).job;
+    q.enqueue({userId:'a',projectId:'later',clientRequestId:'two',payload:{runId:'run-later'}});
+    q.enqueue({userId:'b',projectId:'private-other',clientRequestId:'three',payload:{token:'another-secret'}});
+    q.claimNext();q.claimNext();
+    const status=q.status('a');
+    expect(status).toMatchObject({limits:{global:3,perUser:1,perProject:1},usage:{globalRunning:2,userRunning:1,userQueued:1}});
+    expect(status.tasks).toHaveLength(2);
+    expect(status.tasks[0]).toMatchObject({jobId:own.id,projectId:'own',runId:'run-own',state:'running'});
+    expect(JSON.stringify(status)).not.toMatch(/secret|private-other|payload/u);
+    q.finish(own.id,'completed');
+    expect(q.status('a').tasks).toHaveLength(1);
+  });
   it('defaults to three tasks per user while allowing another user to proceed', () => {
     const q = queue();
     const jobs = ['a', 'a', 'a', 'a', 'b'].map((userId, n) => q.enqueue({

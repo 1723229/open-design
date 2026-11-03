@@ -41,7 +41,6 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   type Ref,
 } from 'react';
@@ -70,6 +69,7 @@ import { resetCloudSignInTipDismissal } from './CloudSignInTip';
 import { SignOutConfirmDialog } from './SignOutConfirmDialog';
 import { notifyAmrLoginStatusChanged } from './amrLoginPolling';
 import { Icon } from './Icon';
+import { EntryWorkspaceSwitcher } from './EntryWorkspaceSwitcher';
 import { GITHUB_STARS_FALLBACK_LABEL, formatStars, useGithubStars } from './useGithubStars';
 import { PlanWordmark, planBadgeTierForWorkspace } from './PlanWordmark';
 import { MarqueeLabel } from './MarqueeLabel';
@@ -92,6 +92,7 @@ import { MessageCenter } from './MessageCenter';
 import type { EntrySettingsSection } from './EntrySettingsMenu';
 import { CompanyAccountMenu } from '../company/CompanyControls';
 import { useCompany } from '../company/CompanyProvider';
+import {CompanyProjectMoveMenuItem,useCompanyProjectMove} from '../company/CompanyProjectMove';
 import type { Project } from '../types';
 import { isRtlLocale, useI18n } from '../i18n';
 import { communityForLocale } from '../lib/community-links';
@@ -264,6 +265,7 @@ interface Props {
    *  account module (e.g. the DeepSeek campaign badge). */
   topRightSlot?: ReactNode;
   inviteSlot?: ReactNode;
+  workspaceSwitcher?: ReactNode;
   /** The one shared workspace context; null → local (no cloud identity) state. */
   context: WorkspaceCollabContext | null;
   /** Account billing metadata (via the vela CLI 收口). Null → the billing
@@ -450,6 +452,7 @@ function RailRecentSection({
   const moveToTeamAvailable =
     workspaceContextHasWorkspaceIdentity(workspaceContext)
     && workspaceContext?.permissions.canShareProjects === true;
+  const companyMove=useCompanyProjectMove();
   const isSharedProject: SharedProjectPredicate = isShared ?? (() => false);
   const ownedBySelf = (projectId: string) => projectOwnedBySelf({
     projectId,
@@ -628,6 +631,7 @@ function RailRecentSection({
                     onRename={onRename}
                     onDuplicate={onDuplicate ? (target) => { void duplicateFlow.duplicate(target); } : undefined}
                     onMoveToTeam={requestMoveToTeam}
+                    extraMenuItems={<CompanyProjectMoveMenuItem project={project} onRequest={project=>{companyMove.request(project);closeRailRecentRowMenu(project.id);}}/>}
                     onDelete={onDelete ? deleteFlow.request : undefined}
                   />
                 </li>
@@ -636,6 +640,7 @@ function RailRecentSection({
           </ul>
         </div>
       </div>
+      {companyMove.dialog}
       {deleteFlow.target ? (
         <ProjectDeleteConfirmDialog
           projectName={deleteFlow.target.name}
@@ -707,29 +712,6 @@ function useRailAutoCollapsed(): boolean {
       ? window.matchMedia(RAIL_AUTO_COLLAPSE_QUERY).matches
       : false;
   return useSyncExternalStore(subscribe, read, () => false);
-}
-
-function handleWorkspaceMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
-  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-  const items = Array.from(
-    event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)'),
-  );
-  if (items.length === 0) return;
-
-  const currentIndex = items.indexOf(document.activeElement as HTMLElement);
-  let nextIndex: number;
-  if (event.key === 'Home') {
-    nextIndex = 0;
-  } else if (event.key === 'End') {
-    nextIndex = items.length - 1;
-  } else if (event.key === 'ArrowUp') {
-    nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
-  } else {
-    nextIndex = currentIndex < 0 || currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
-  }
-
-  event.preventDefault();
-  items[nextIndex]?.focus();
 }
 
 // Team management (members, dashboard, settings) lives in B's vela/web console,
@@ -1981,6 +1963,7 @@ export function EntryNavRail({
   open,
   topRightSlot,
   inviteSlot,
+  workspaceSwitcher,
   context,
   billing,
   billingResponse,
@@ -2005,6 +1988,7 @@ export function EntryNavRail({
   workspaceQuotaStatus,
   priorityAnnouncementMetricsConsent,
 }: Props) {
+  const company = useCompany();
   const { t } = useI18n();
   const analytics = useAnalytics();
   const analyticsPage = entryViewToTracking(view);
@@ -2069,7 +2053,6 @@ export function EntryNavRail({
     (context?.workspaceType === 'personal' ? 'Personal workspace' : '') ||
     context?.workspaceId ||
     '';
-  const workspaceInitial = workspaceName.charAt(0).toUpperCase() || 'W';
   const activeWorkspaceItems = identityWorkspaceItems.filter(
     (item) => item.memberStatus !== 'removed' && item.lifecycleState !== 'deleted',
   );
@@ -2290,101 +2273,31 @@ export function EntryNavRail({
           <span>{t('app.brand')}</span>
         </div>
 
-        {context ? (
-          <div className="entry-nav-rail__team-wrap">
-            <button
-              type="button"
-              className="entry-nav-rail__team"
-              onClick={() => {
-                trackEntryNavigationClick(analytics.track, {
-                  page_name: analyticsPage,
-                  area: 'entry_nav',
-                  element: 'workspace_switcher_trigger',
-                  target: 'workspace_switcher',
-                  entry_from: 'sidebar',
-                  ...workspaceDimensions,
-                });
-                setTeamOpen((v) => !v);
-              }}
-              aria-expanded={teamOpen}
-              data-testid="workspace-switcher"
-            >
-              <span className="entry-nav-rail__team-avatar" aria-hidden>{workspaceInitial}</span>
-              {/* Long names slide their tail into view while the row is hovered
-                  (OPEND-3112) instead of staying behind the ellipsis; the slot
-                  keeps the layout class, the motion lives in `.od-marquee`. */}
-              <MarqueeLabel className="entry-nav-rail__team-name" text={workspaceName} />
-              {/* The 最近浏览过 head's disclosure, exactly (per product: 展开和
-                  收起和最近浏览过的一样): the glyph SWAPS rather than rotating —
-                  › closed, ⌄ open — at the same 14px, in a fixed 14px slot so a
-                  narrower caret cannot pull the workspace name along with it. */}
-              <span className="entry-nav-rail__team-chevron" aria-hidden>
-                <Icon name={teamOpen ? 'chevron-down' : 'chevron-right'} size={14} />
-              </span>
-            </button>
-            {teamOpen ? (
-              <>
-                <div className="entry-nav-rail__menu-backdrop" onClick={() => setTeamOpen(false)} />
-                <div
-                  className={`entry-nav-rail__team-menu ${styles.workspaceMenu}`}
-                  role="menu"
-                  aria-label={t('workspaceSwitcher.title')}
-                  onKeyDown={handleWorkspaceMenuKeyDown}
-                >
-                  <div className={styles.workspaceMenuHead}>
-                    <span>{t('workspaceSwitcher.title')}</span>
-                    <span className={visibleWorkspaceItems.length >= 50 ? styles.workspaceCount : styles.workspaceCountHidden}>{visibleWorkspaceItems.length}/50</span>
-                  </div>
-                  <div
-                    className="entry-nav-rail__workspace-list"
-                    data-testid="workspace-switcher-list"
-                  >
-                    {visibleWorkspaceItems.map((item) => {
-                      const active = item.workspaceId === context.workspaceId;
-                      // Older daemon directory payloads can omit workspaceName.
-                      // Keep those rows identifiable and actionable by falling
-                      // back to the stable workspace id instead of crashing.
-                      const itemName = item.workspaceName?.trim() || item.workspaceId;
-                      const initial = itemName.charAt(0).toUpperCase() || 'W';
-                      return (
-                        <button
-                          key={item.workspaceId}
-                          type="button"
-                          className={`entry-nav-rail__menu-item${active ? ' is-current' : ''}`}
-                          role="menuitem"
-                          aria-current={active ? 'true' : undefined}
-                          // Only the in-flight switch disables a row. Disabling the
-                          // CURRENT one made the UA grey it out, so the selected
-                          // workspace read as the inactive one and vice versa;
-                          // `.is-current` (bold + accent ✓) is the selected signal.
-                          disabled={workspaceSwitchingId === item.workspaceId}
-                          onClick={() => {
-                            void switchWorkspace(item.workspaceId);
-                          }}
-                        >
-                          <span className="entry-nav-rail__team-avatar" aria-hidden>{initial}</span>
-                          {/* #5517's switcher rows are avatar + full name + ✓ only.
-                              The raw role word ate the name's width and truncated
-                              it; the role is already on 设置·工作区. */}
-                          <MarqueeLabel
-                            className="entry-nav-rail__workspace-menu-name"
-                            text={itemName}
-                          />
-                          {active ? <span className={styles.workspaceSelectedMark}><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M9.9997 15.1709L19.1921 5.97852L20.6063 7.39273L9.9997 17.9993L3.63574 11.6354L5.04996 10.2212L9.9997 15.1709Z" /></svg></span> : null}
-                        </button>
-                      );
-                    })}
-                    {workspaceDirectoryLoading && visibleWorkspaceItems.length === 0 ? (
-                      <div className="entry-nav-rail__menu-item is-muted" role="status">
-                        {t('common.loading')}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div
-                    className="entry-nav-rail__workspace-actions"
-                    data-testid="workspace-switcher-actions"
-                  >
-                    <div className="entry-nav-rail__menu-divider" />
+        {workspaceSwitcher ?? (context ? (
+          <EntryWorkspaceSwitcher
+            name={workspaceName}
+            activeId={context.workspaceId}
+            items={visibleWorkspaceItems.map(item => ({
+              id: item.workspaceId,
+              name: item.workspaceName?.trim() || item.workspaceId,
+              disabled: workspaceSwitchingId === item.workspaceId,
+            }))}
+            open={teamOpen}
+            onOpenChange={next => {
+              if (next) trackEntryNavigationClick(analytics.track, {
+                page_name: analyticsPage,
+                area: 'entry_nav',
+                element: 'workspace_switcher_trigger',
+                target: 'workspace_switcher',
+                entry_from: 'sidebar',
+                ...workspaceDimensions,
+              });
+              setTeamOpen(next);
+            }}
+            onSelect={id => { void switchWorkspace(id); }}
+            loading={workspaceDirectoryLoading}
+            headerMeta={<span className={visibleWorkspaceItems.length >= 50 ? styles.workspaceCount : styles.workspaceCountHidden}>{visibleWorkspaceItems.length}/50</span>}
+          >
                     {canAccessInviteFlow && inviteTarget.kind !== 'unavailable' ? (
                       <button
                         type="button"
@@ -2440,12 +2353,8 @@ export function EntryNavRail({
                         <Icon name="plus" size={15} /> {t('workspaceSwitcher.createTeam')}
                       </a>
                     ) : null}
-                  </div>
-                </div>
-              </>
-            ) : null}
-          </div>
-        ) : null}
+          </EntryWorkspaceSwitcher>
+        ) : null)}
 
         {/* No search row here any more (per product: 搜索和收起跟 home icon 一起
             放在顶部): the search button and the rail toggle sit in the chrome
@@ -2479,7 +2388,7 @@ export function EntryNavRail({
                 legacy `all-projects` view (the `/all-projects` deep link)
                 opens that page on its 团队项目 tab, so it lights this item. */}
             <NavButton
-              active={view === 'drafts' || view === 'all-projects'}
+              active={view === 'drafts' || view === 'all-projects' || view === 'projects'}
               ariaLabel={t('entry.navDrafts')}
               label={t('workspaceSwitcher.draftsTooltip')}
               onClick={() => selectView('drafts')}
@@ -2498,8 +2407,8 @@ export function EntryNavRail({
             </NavButton>
             <NavButton
               active={view === 'plugins'}
-              ariaLabel={t('entry.navPlugins')}
-              label={t('entry.navPlugins')}
+              ariaLabel={t(company.enabled ? 'pluginsView.kind.skills' : 'entry.navPlugins')}
+              label={t(company.enabled ? 'pluginsView.kind.skills' : 'entry.navPlugins')}
               onClick={() => selectView('plugins')}
               testId="entry-nav-plugins"
             >
@@ -2512,7 +2421,7 @@ export function EntryNavRail({
                 the same way in either state, above 最近项目 (content, not a
                 place to go). `entry-settings-button` stays UNIQUE: this branch
                 and the signed-out one below are mutually exclusive. */}
-            <NavButton
+            {!company.isMember && <NavButton
               ariaLabel={t('entry.accountSettings')}
               label={t('entry.accountSettings')}
               onClick={() => {
@@ -2526,7 +2435,7 @@ export function EntryNavRail({
               testId="entry-settings-button"
             >
               <Icon name="settings" size={16} />
-            </NavButton>
+            </NavButton>}
             {/* 最近项目 sits under 设置 (per product) — the last thing in the
                 destination list, because it is a list of CONTENT rather than a
                 place to go. */}
@@ -2561,7 +2470,7 @@ export function EntryNavRail({
                 workspace — so the destination list reads the same either way.
                 No 团队项目 here: that grid is team-scoped. */}
             <NavButton
-              active={view === 'drafts'}
+              active={view === 'drafts' || view === 'projects'}
               ariaLabel={t('entry.navDrafts')}
               label={t('workspaceSwitcher.draftsTooltip')}
               onClick={() => selectView('drafts')}
@@ -2580,8 +2489,8 @@ export function EntryNavRail({
             </NavButton>
             <NavButton
               active={view === 'plugins'}
-              ariaLabel={t('entry.navPlugins')}
-              label={t('entry.navPlugins')}
+              ariaLabel={t(company.enabled ? 'pluginsView.kind.skills' : 'entry.navPlugins')}
+              label={t(company.enabled ? 'pluginsView.kind.skills' : 'entry.navPlugins')}
               onClick={() => selectView('plugins')}
               testId="entry-nav-plugins"
             >
@@ -2595,7 +2504,7 @@ export function EntryNavRail({
                 signed-out half of the pair (testId `entry-settings-button` is
                 the e2e contract); the signed-in branch above renders the same
                 item in the same slot under 插件, and the two never coexist. */}
-            <NavButton
+            {!company.isMember && <NavButton
               ariaLabel={t('entry.accountSettings')}
               label={t('entry.accountSettings')}
               onClick={() => {
@@ -2609,7 +2518,7 @@ export function EntryNavRail({
               testId="entry-settings-button"
             >
               <Icon name="settings" size={16} />
-            </NavButton>
+            </NavButton>}
             {/* 最近项目 under 设置, exactly as on the signed-in branch
                 (OPEND-3140). Without a cloud identity the catalog EntryShell
                 hands over IS the local project list, so the local shell gets

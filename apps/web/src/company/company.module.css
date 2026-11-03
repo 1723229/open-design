@@ -34,6 +34,8 @@
   .loginPane:global(.onboarding-cloud__pane) { min-height: 100dvh; padding: 32px 24px; }
 }
 .account { position: relative; display: inline-flex; align-items: center; }
+.spaceNotice { margin: 4px 10px 10px; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.spaceNotice[role="alert"] { color: var(--danger-text); }
 .menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 100; display: grid; gap: 6px; min-width: 190px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); box-shadow: var(--shadow-lg); }
 .dialog { width: min(94vw, 620px); max-height: 85dvh; overflow: auto; padding: 24px; }
 .rows { display: grid; gap: 12px; margin: 16px 0; }
@@ -44,6 +46,17 @@
 .sharing { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
 .sharing label { display: grid; gap: 6px; }
 .sharing input, .sharing select { padding: 8px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; max-width: 100%; }
-.sharingLink { display: grid; gap: 8px; margin-block: 16px; }
-.sharingLink p { margin: 0; color: var(--text-muted); }
-.sharingLink input { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+.shareDialog { max-height: 85dvh; overflow-y: auto; }
+.shareError { display: grid; gap: 8px; }
+.shareMembers { display: grid; gap: 12px; padding-block-start: 16px; border-block-start: 1px solid var(--share-published-border); }
+.shareTeam { margin: 0; color: var(--share-text-notice); line-height: 18px; overflow-wrap: anywhere; }
+.shareTeam a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.shareMember { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.shareMember > span:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.shareMember > span:last-child { color: var(--share-text-secondary); }
+.shareMember > button { flex-shrink: 0; padding: 4px; font-size: inherit; }
+.shareInvite { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.shareInvite label { display: grid; gap: 6px; min-width: 0; }
+.shareInvite > button { grid-column: 1 / -1; }
+.shareMember select, .shareInvite select { box-sizing: border-box; min-width: 0; max-width: 100%; height: var(--share-control-h); padding: 0 8px; border: 1px solid var(--share-published-border); border-radius: var(--share-radius); background: var(--share-white); color: var(--share-text-strong); font: inherit; }
+.shareMember select:focus-visible, .shareInvite select:focus-visible { outline: 2px solid var(--share-focus); outline-offset: 2px; }

@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import {CompanyProjectMoveMenuItem,useCompanyProjectMove} from "../company/CompanyProjectMove";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Dialog, DialogDescription, DialogFooter, DialogTitle } from "@open-design/components";
 import type { WorkspaceCollabContext } from "@open-design/contracts";
@@ -140,6 +141,7 @@ export function DesignsTab({
 	isActive = true,
 }: Props) {
 	const renameTitleId = useId();
+	const companyMove=useCompanyProjectMove(onRefresh);
 	const confirmTitleId = useId();
 	const t = useT();
 	const analytics = useAnalytics();
@@ -714,7 +716,7 @@ export function DesignsTab({
 							<button
 								type="button"
 								className="designs-select-delete"
-								disabled={selected.size === 0}
+								disabled={selected.size === 0 || projects.some(project=>selected.has(project.id)&&project.companyAccess?.canManage===false)}
 								onClick={handleBatchDelete}
 							>
 								{t("designs.deleteSelected")}
@@ -994,6 +996,7 @@ export function DesignsTab({
 													setMenuOpenId(null);
 													handleRenameProject(p);
 												}}
+												disabled={p.companyAccess?.canWrite===false}
 											>
 												<Icon name="pencil" size={14} />
 												<span>{t("designs.menuRename")}</span>
@@ -1014,15 +1017,18 @@ export function DesignsTab({
 														setMenuOpenId(null);
 														handleDuplicateProject(p);
 													}}
+													disabled={p.companyAccess?.canWrite===false}
 												>
 													<Icon name="copy" size={12} />
 													<span>{t("designs.menuDuplicate")}</span>
 												</button>
 											) : null}
+											<CompanyProjectMoveMenuItem project={p} onRequest={project=>{companyMove.request(project);setMenuOpenId(null);}}/>
 											<button
 												type="button"
 												role="menuitem"
 												className="danger"
+												disabled={p.companyAccess?.canManage===false}
 												onClick={() => {
 													const projectKind = projectKindFromMetadataToTracking(p.metadata);
 													trackProjectsMorePopoverClick(analytics.track, {
@@ -1236,6 +1242,7 @@ export function DesignsTab({
 					</DialogFooter>
 				</Dialog>
 			) : null}
+			{companyMove.dialog}
 			{deleteFlow.target ? (
 				<ProjectDeleteConfirmDialog
 					projectName={deleteFlow.target.name}

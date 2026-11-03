@@ -1566,6 +1566,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
           setDesignToolboxOpen(true);
         },
         openPluginsPanel: (opener?: HTMLElement | null) => {
+          if (company.enabled) return;
           cancelComposerPanelClose();
           setComposerEngaged(true);
           panelOpenerRef.current = resolveStandalonePanelOpener(opener);
@@ -1583,7 +1584,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
           }));
         },
       }),
-      [connectors, mcpServers, pluginsForComposer, skills]
+      [company.enabled, connectors, mcpServers, pluginsForComposer, skills]
     );
 
     /** Clears everything sendable; returns the linked workspace contexts it deliberately keeps. */
@@ -3268,7 +3269,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     );
     const filteredPlugins = useMemo(
       () =>
-        mention
+        mention && !company.enabled
           ? pluginsForComposer
               .filter((p) => {
                 if (!mentionQuery) return true;
@@ -3281,7 +3282,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
               })
               .slice(0, 8)
           : [],
-      [mention, mentionQuery, pluginsForComposer],
+      [company.enabled, mention, mentionQuery, pluginsForComposer],
     );
     const filteredMcpServers = useMemo(
       () =>
@@ -3306,7 +3307,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     );
     const filteredConnectors = useMemo(
       () =>
-        mention
+        mention && !company.enabled
           ? connectors
               .filter((connector) => {
                 if (!mentionQuery) return true;
@@ -3324,7 +3325,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
               })
               .slice(0, 8)
           : [],
-      [mention, mentionQuery, connectors],
+      [company.enabled, mention, mentionQuery, connectors],
     );
     // Already-staged skills drop out of the suggestion list (carried over
     // from main) so the @-popover keeps moving forward as the user picks.
@@ -6590,6 +6591,7 @@ function MentionPopover({
 }) {
   const { locale, t } = useI18n();
   const ref = useRef<HTMLDivElement | null>(null);
+  const company = useCompany();
   const tabs: Array<{ id: MentionTab; label: string }> = [
     { id: 'all', label: t('chat.mentionTabAll') },
     { id: 'files', label: t('chat.mentionTabFiles') },
@@ -6619,7 +6621,7 @@ function MentionPopover({
   return (
     <div className="mention-popover" data-testid="mention-popover">
       <div className="mention-tabs" role="tablist" aria-label={t('chat.mentionTabsAria')}>
-        {tabs.map((item) => (
+        {tabs.filter(item => !company.enabled || !['plugins', 'connectors'].includes(item.id)).map((item) => (
           <button
             key={item.id}
             type="button"
@@ -6639,7 +6641,9 @@ function MentionPopover({
             {query ? (
               <>{t('chat.mentionNoResults', { query })}</>
             ) : (
-              <>{t('chat.mentionSearchPrompt')}</>
+              <>{company.enabled
+                ? tabs.filter(item => !['all', 'plugins', 'connectors'].includes(item.id)).map(item => item.label).join(' · ')
+                : t('chat.mentionSearchPrompt')}</>
             )}
           </div>
         ) : null}

@@ -5,12 +5,13 @@ import { buildWorkspacePermissions, buildWorkspaceSeatSummary, type WorkspaceCol
 import { ProjectDeleteConfirmDialog } from '../../src/components/project-actions/ProjectDeleteConfirmDialog';
 import { useProjectDeleteFlow } from '../../src/components/project-actions/useProjectDeleteFlow';
 import type { Project } from '../../src/types';
+import { CompanyProvider } from '../../src/company/CompanyProvider';
 const context: WorkspaceCollabContext = { workspaceId: 'ws', workspaceType: 'personal', workspaceMemberId: 'member', role: 'owner', memberStatus: 'active', lifecycleState: 'active', billingState: 'active', planId: null, providerMode: 'platform_credits', seatSummary: buildWorkspaceSeatSummary({ seatLimit: 1, usedSeats: 1 }), permissions: buildWorkspacePermissions({ role: 'owner', lifecycleState: 'active' }) };
 const project: Project = { id: 'project', name: 'Example', skillId: null, designSystemId: null, createdAt: 1, updatedAt: 1 };
 const request = vi.fn<typeof fetch>();
 const remove = vi.fn(async () => true);
-function Harness() {
-  const flow = useProjectDeleteFlow({ onDelete: remove, analyticsPage: 'home', workspaceContext: context });
+function Harness({ companySession = false }: { companySession?: boolean }) {
+  const flow = useProjectDeleteFlow({ onDelete: remove, analyticsPage: 'home', workspaceContext: companySession ? null : context });
   return <><button onClick={() => flow.request(project)}>Request delete</button><button onClick={() => void flow.commit()}>Invoke commit directly</button>{flow.target ? <ProjectDeleteConfirmDialog projectName={flow.target.name} activeShareCount={flow.activeShareCount} shareReadStatus={flow.shareReadStatus} pending={flow.pending} failed={flow.failed} onCancel={flow.cancel} onConfirm={() => void flow.commit()} /> : null}</>;
 }
 beforeEach(() => { request.mockReset(); remove.mockClear(); vi.stubGlobal('fetch', request); });
@@ -32,6 +33,16 @@ it('counts active shares only and does not delete while reading the confirmation
   fireEvent.click(screen.getByTestId('project-delete-confirm-accept'));
   await waitFor(() => expect(remove).toHaveBeenCalledExactlyOnceWith('project'));
   await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+});
+it('keeps the original project deletion usable with an authenticated company session', async () => {
+  request.mockImplementation(async input => String(input) === '/api/company/session'
+    ? Response.json({ enabled: true, user: { id: 'member', username: 'member', role: 'member', mustChangePassword: false }, csrfToken: 'csrf', presentation: { showAgentIdentity: false, hiddenSettingsSections: [] } })
+    : history([]));
+  render(<CompanyProvider><Harness companySession /></CompanyProvider>);
+  fireEvent.click(await screen.findByText('Request delete'));
+  await waitFor(() => expect(screen.getByTestId('project-delete-confirm-accept')).toBeEnabled());
+  fireEvent.click(screen.getByTestId('project-delete-confirm-accept'));
+  await waitFor(() => expect(remove).toHaveBeenCalledExactlyOnceWith('project'));
 });
 it.each<{ statuses: ('active' | 'stopped')[] }>([{ statuses: [] }, { statuses: ['stopped'] }])('keeps the existing dialog for no active shares: $statuses', async ({ statuses }) => {
   request.mockImplementation(async () => history(statuses));

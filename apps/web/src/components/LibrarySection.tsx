@@ -53,7 +53,7 @@ import { LibraryPreviewModal } from './LibraryPreviewModal';
 import { LibraryUploadModal } from './LibraryUploadModal';
 import styles from './LibrarySection.module.css';
 import { useT } from '../i18n';
-import { useWorkspaceContext } from '../collab/useWorkspaceContext';
+import { useResourceWorkspaceContext as useWorkspaceContext } from '../company/CompanyResourceContext';
 import { workspaceIdentityCacheKey } from '../collab/workspace-identity';
 import { resolveProjectWorkspaceContext } from '../collab/useProjectWorkspaceScope';
 

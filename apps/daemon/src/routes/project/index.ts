@@ -134,7 +134,7 @@ import { auditDesignSystemPackage } from '../../tools-connectors-cli.js';
 import { parseOrchestratorWorkspace } from '../../workspace-contract.js';
 import { registerProjectConversationRoutes } from './conversations.js';
 import { workspaceProjectGroupCountProperties } from './analytics.js';
-import type { ProjectCommentWorkspaceContextResolution } from './comments.js';
+import type { ProjectCommentWorkspaceContextResolution, RegisterProjectCommentRoutesDeps } from './comments.js';
 import {
   projectResourceIdFor,
   velaProjectSyncStateToProject,
@@ -342,7 +342,7 @@ function assertProjectCreatePreparationWithinDeadline(
 }
 
 export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation' | 'collabSync'> {
-  company?: Pick<import('../../company/routes.js').CompanyRuntime, 'filterProjects' | 'claimProject'>;
+  company?: Pick<import('../../company/routes.js').CompanyRuntime, 'filterProjects' | 'claimProject'> & {enabled?:boolean};
   /** Stop public bindings before any catalog/local deletion; production supplies this capability. */
   stopPublicFilesBeforeDelete?: CommentFileDeletion;
   publicFileMutations?: PublicFileMutations;
@@ -415,6 +415,8 @@ export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | '
    */
   resolveAuthorMemberId?: (authorization: string | undefined) => Promise<string | undefined>;
   resolveCurrentAuthorDisplayName?: () => string | null;
+  resolveLocalCommentIdentity?: RegisterProjectCommentRoutesDeps['resolveLocalCommentIdentity'];
+  resolveLocalResourceScope?: (req:Request,projectId:string,kind:'skill'|'designSystem')=>{workspaceId:string;workspaceMemberId:string}|null;
   resolveWorkspaceContext?: (
     req: Request,
     projectId: string,
@@ -4078,6 +4080,13 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         typeof req.body?.pluginSource === 'string' && req.body.pluginSource.trim().length > 0
           ? req.body.pluginSource.trim()
           : null;
+      const resourceCreationScope=ctx.company?.enabled ? skillCatalogScope ?? designSystemCatalogScope ?? creationWorkspaceScope : creationWorkspaceScope;
+      if(ctx.company?.enabled && requestedPluginId) {
+        const visible=await ctx.pluginScope?.getPlugin(requestedPluginId,resourceCreationScope) as {source?:unknown}|null|undefined;
+        if(!visible || (requestedPluginSource && visible.source!==requestedPluginSource)) {
+          return sendApiError(res,404,'PLUGIN_NOT_FOUND','plugin not found');
+        }
+      }
       // Local identity resolution only. Do not compare this historical source
       // with the project's current Workspace or perform a membership request:
       // Home already reconciles staged selections against its current local
@@ -4100,7 +4109,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           ? selectedLocalPlugin
           : ctx.pluginScope
             ? await awaitProjectCreatePreparation(
-                ctx.pluginScope.getPlugin(requestedPluginId, creationWorkspaceScope),
+                ctx.pluginScope.getPlugin(requestedPluginId, resourceCreationScope),
                 projectCreatePreparationDeadline,
                 'resolving the selected plugin',
               )
@@ -4281,6 +4290,10 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         // `/api/plugins/:id/apply-local` uses, then read the example's bytes
         // from the record's own path. The request body contributes an identity
         // claim only; it never contributes content.
+        if(ctx.company?.enabled) {
+          const visible=await ctx.pluginScope?.getPlugin(examplePluginId,resourceCreationScope) as {source?:unknown}|null|undefined;
+          if(!visible || visible.source!==exampleSource) return sendApiError(res,404,'PLUGIN_NOT_FOUND','example plugin not found');
+        }
         const resolvedExample = await awaitProjectCreatePreparation(
           ctx.pluginScope?.getLocalPluginBySource?.(
             examplePluginId,
@@ -4385,7 +4398,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
               loadPluginRegistryView(
                 selectedLocalPlugin
                   ? localPluginRegistryScope(selectedLocalPlugin)
-                  : creationWorkspaceScope,
+                  : resourceCreationScope,
               ),
               projectCreatePreparationDeadline,
               'loading plugin resources',
@@ -4893,18 +4906,21 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         }
 
         const now = Date.now();
-        const project = insertProject(db, {
-          id: targetProjectId,
-          name: targetName,
-          skillId: sourceProject.skillId ?? null,
-          designSystemId: sourceProject.designSystemId ?? null,
-          pendingPrompt: null,
-          metadata,
-          customInstructions: sourceProject.customInstructions ?? null,
-          createdAt: now,
-          updatedAt: now,
-        });
-        ctx.company?.claimProject(req, targetProjectId);
+        const project = db.transaction(() => {
+          const created = insertProject(db, {
+            id: targetProjectId,
+            name: targetName,
+            skillId: sourceProject.skillId ?? null,
+            designSystemId: sourceProject.designSystemId ?? null,
+            pendingPrompt: null,
+            metadata,
+            customInstructions: sourceProject.customInstructions ?? null,
+            createdAt: now,
+            updatedAt: now,
+          });
+          ctx.company?.claimProject(req, targetProjectId, sourceProject.id);
+          return created;
+        })();
         insertedProject = true;
         bindDuplicateIntoRequestWorkspace(createHome, targetProjectId, now);
         const conversationId = randomId();
@@ -5524,7 +5540,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         const projectBinding = getWorkspaceProjectByProjectId(db, req.params.id);
         const designSystemValidation = await validateProjectDesignSystemId(
           patch.designSystemId,
-          {
+          ctx.resolveLocalResourceScope?.(req,req.params.id,'designSystem') ?? {
             workspaceId: projectBinding?.workspaceId ?? null,
             workspaceMemberId: projectBinding?.createdByWorkspaceMemberId ?? null,
           },
@@ -5543,7 +5559,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         const projectBinding = getWorkspaceProjectByProjectId(db, req.params.id);
         const skillValidation = await validateProjectSkillId(
           patch.skillId,
-          {
+          ctx.resolveLocalResourceScope?.(req,req.params.id,'skill') ?? {
             workspaceId: projectBinding?.workspaceId ?? null,
             workspaceMemberId: projectBinding?.createdByWorkspaceMemberId ?? null,
           },
@@ -5579,6 +5595,17 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
             ? { ...metadataWithoutScopes, localCatalogScopes: nextScopes }
             : metadataWithoutScopes;
         }
+      }
+      if(ctx.resolveLocalResourceScope && ['skillId','designSystemId'].some(key=>Object.prototype.hasOwnProperty.call(patch,key))) {
+        const metadata=patch.metadata ?? patchProject.metadata ?? {};
+        const scopes={...metadata.localCatalogScopes};
+        for(const [field,kind] of [['skillId','skill'],['designSystemId','designSystem']] as const) {
+          if(Object.prototype.hasOwnProperty.call(patch,field)) {
+            const scope=patch[field] ? ctx.resolveLocalResourceScope(req,req.params.id,kind) : null;
+            if(scope) scopes[kind]=scope;else delete scopes[kind];
+          }
+        }
+        patch.metadata={...metadata,localCatalogScopes:scopes};
       }
       if (typeof patch.name === 'string' && patch.name.trim().length > 0) {
         // Design-system workspace projects mirror their design system's
@@ -8015,7 +8042,8 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
         res.json(body);
       } catch (err: any) {
         const message = String(err?.message || err);
-        if (/^invalid (source|versionSource);/u.test(message)) {
+        if (/^invalid (source|versionSource);/u.test(message)
+          || message === 'invalid file name' || message === 'reserved project path') {
           return sendApiError(res, 400, 'BAD_REQUEST', message);
         }
         if (err instanceof ArtifactRegressionError) {

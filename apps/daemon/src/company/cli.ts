@@ -83,6 +83,7 @@ export async function installCompanyCliFetch(args: string[], env: NodeJS.Process
 
 const USAGE = `Usage:
   od company session [--json]
+  od company tasks [--json]
   od company login --username <name> --password-file <path|-> [--session-file <path>] [--json]
   od company logout [--json]
   od company password --password-file <current-path|-> --new-password-file <new-path|-> [--session-file <path>] [--json]
@@ -92,6 +93,12 @@ const USAGE = `Usage:
   od company member set <projectId> <userId> --role editor|viewer [--json]
   od company member remove <projectId> <userId> [--json]
   od company audit [--json]
+  od company project move <projectId> --prompt-file <path|-> [--json]
+  od company team list [--json]
+  od company team get <teamId> [--json]
+  od company team create|update [teamId] --prompt-file <path|-> [--json]
+  od company team member-set <teamId> <userId> --role admin|editor|viewer [--json]
+  od company team member-remove <teamId> <userId> [--json]
   od company models list [--json]
   od company models provider-save|provider-delete|test|activate|catalog --prompt-file <path|-> [--json]
 
@@ -156,6 +163,7 @@ export async function runCompanyCli(args: string[], options: CliOptions = {}): P
         }
       }
     } else if (command === 'logout') { endpoint = '/api/company/auth/logout'; method = 'POST'; body = {}; }
+    else if (command === 'tasks') endpoint = '/api/company/tasks';
     else if (command === 'users') {
       endpoint = '/api/company/users';
       const operation = positional[1] ?? 'list';
@@ -184,6 +192,29 @@ export async function runCompanyCli(args: string[], options: CliOptions = {}): P
         if (!userId) throw new Error('A user ID is required');
         if (operation === 'remove') { endpoint += `/${encodeURIComponent(userId)}`; method = 'DELETE'; }
         else { method = 'PUT'; body = { userId, role: flags.role }; }
+      }
+    } else if (command === 'project') {
+      const [,operation,projectId]=positional;
+      if (operation !== 'move' || !projectId || typeof flags['prompt-file'] !== 'string') throw new Error('Use project move <projectId> --prompt-file <path|->');
+      endpoint=`/api/company/projects/${encodeURIComponent(projectId)}/move`;
+      method='POST';body=JSON.parse(inputFile(flags['prompt-file'])) as Record<string,unknown>;
+    } else if (command === 'team') {
+      const operation = positional[1] ?? 'list', teamId = positional[2], userId = positional[3];
+      if (!['list','get','create','update','member-set','member-remove'].includes(operation)) throw new Error('Unknown team operation');
+      endpoint = '/api/company/teams';
+      if (['get','update','member-set','member-remove'].includes(operation)) {
+        if (!teamId) throw new Error('A team ID is required');
+        endpoint += `/${encodeURIComponent(teamId)}`;
+      }
+      if (['create','update'].includes(operation)) {
+        if (typeof flags['prompt-file'] !== 'string') throw new Error('--prompt-file is required');
+        body = JSON.parse(inputFile(flags['prompt-file'])) as Record<string,unknown>;
+        method = operation === 'create' ? 'POST' : 'PATCH';
+      } else if (operation.startsWith('member-')) {
+        if (!userId) throw new Error('A user ID is required');
+        endpoint += '/members';
+        if (operation === 'member-set') {method='PUT';body={userId,role:flags.role};}
+        else {method='DELETE';endpoint+=`/${encodeURIComponent(userId)}`;}
       }
     } else if (command === 'models') {
       const operation = positional[1] ?? 'list';

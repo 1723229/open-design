@@ -8,6 +8,7 @@ import type {
 import type { ProjectSyncIntent, ProjectSyncIntentEvent, ProjectSyncState } from './project-sync.js';
 import type { TeamResourceState } from './team-resources.js';
 import type { WorkspaceCollabContext } from './collab.js';
+import type { CompanyProjectAccess } from './company.js';
 
 export type ProjectKind =
   | 'prototype'
@@ -342,6 +343,9 @@ export interface ProjectMetadata {
 
 export interface Project {
   id: string;
+  /** Self-hosted team ownership, independent from cloud workspace identity. */
+  companyTeamId?: string | null;
+  companyAccess?: CompanyProjectAccess;
   name: string;
   skillId: string | null;
   designSystemId: string | null;
@@ -439,6 +443,7 @@ export interface CreateProjectExampleReference {
 
 export interface CreateProjectRequest {
   name: string;
+  companyTeamId?: string;
   /** Optional project library location id. Omit or use `default` for .od/projects. */
   projectLocationId?: string;
   skillId?: string | null;

@@ -12,6 +12,38 @@
   margin: 0;
 }
 
+.mobileRailBackdrop { display: none; }
+
+@media (max-width: 1080px) {
+  .companySpaces :global(.entry) { position: relative; }
+  .companySpaces :global(.entry--rail-open .entry-nav-rail) {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: min(280px, calc(100vw - 48px));
+    overflow: visible;
+    pointer-events: auto;
+    z-index: 41;
+  }
+  .companySpaces :global(.entry-nav-rail__panel) {
+    margin-inline: 12px 0;
+    padding: 12px;
+    border-radius: var(--radius-md);
+    background: var(--bg-panel);
+    box-shadow: var(--shadow-lg);
+  }
+  .mobileRailBackdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    inset-inline-start: min(280px, calc(100vw - 48px));
+    border: 0;
+    border-radius: 0;
+    background: rgb(0 0 0 / 16%);
+    z-index: 40;
+  }
+}
+
 /* Member entry reference, user-confirmed 2026-10-20: its warm frame supersedes
    the earlier white entry ground only on Home/project-list light surfaces.
    Other entry views, project workbenches and dark themes keep their cascade. */

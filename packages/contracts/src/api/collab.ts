@@ -397,6 +397,8 @@ export interface WorkspaceBillingRecovery {
  * payload. `context` is null when signed out or B is unavailable.
  */
 export interface WorkspaceCollabContext {
+  /** Local authenticated resource authority; absent for the official cloud provider. */
+  identitySource?: 'company';
   workspaceId: string;
   workspaceType: WorkspaceType;
   workspaceMemberId: string;

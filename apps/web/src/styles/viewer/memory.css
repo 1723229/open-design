@@ -1320,6 +1320,7 @@
 }
 .manual-edit-footer-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-12);
@@ -1333,14 +1334,16 @@
   min-width: 0;
 }
 .manual-edit-footer-left {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
 }
 .manual-edit-footer-right {
   flex: 0 0 auto;
+  margin-left: auto;
 }
 .manual-edit-delete-btn,
 .manual-edit-history-btn {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   width: 36px;

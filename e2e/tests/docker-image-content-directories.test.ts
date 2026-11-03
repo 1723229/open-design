@@ -23,6 +23,12 @@ function stageSections(content: string): { build: string; runtime: string } {
 }
 
 describe("deploy/Dockerfile content directories", () => {
+  it("ships the original marketplace seed directories in the company runtime", async () => {
+    const content = await readFile(new URL("../../deploy/company/Dockerfile", import.meta.url), "utf8");
+    const resources = content.slice(content.indexOf(" AS resources"), content.indexOf("FROM resources AS agent"));
+    expect(resources).toMatch(/^COPY plugins\/registry \.\/plugins\/registry$/m);
+  });
+
   it("copies the self-contained postinstall consumer", async () => {
     const content = await readFile(dockerfile, "utf8");
     const { build } = stageSections(content);

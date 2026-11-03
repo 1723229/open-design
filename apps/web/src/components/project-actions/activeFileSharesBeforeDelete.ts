@@ -8,13 +8,14 @@ export async function activeFileSharesBeforeDelete(
   projectId: string,
   filePaths: readonly string[],
   context: WorkspaceCollabContext | null | undefined,
+  companySession = false,
 ): Promise<number | null> {
   const htmlPaths = new Set(filePaths.filter(path => /\.html?$/i.test(path)));
   if (htmlPaths.size === 0) return null;
-  if (!context) throw new Error('workspace identity unavailable for shared HTML deletion');
+  if (!context && !companySession) throw new Error('workspace identity unavailable for shared HTML deletion');
   const generation = currentWorkspaceAccountGeneration();
   const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/share-state`, {
-    cache: 'no-store', headers: workspaceProjectHeaders(context),
+    cache: 'no-store', ...(context ? {headers: workspaceProjectHeaders(context)} : {}),
   });
   const history: unknown = response.ok ? await response.json() : null;
   if (generation !== currentWorkspaceAccountGeneration() || !isProjectShareHistory(history, projectId)) {

@@ -132,14 +132,15 @@ interface PluginShareTaskLike {
 }
 
 interface PluginRouteHelpers {
+  requireScopedLocalSelection?: boolean;
   PLUGIN_PREVIEWS_DIR: string;
   pluginUpload: {
     single(field: string): RequestHandler;
     array(field: string, maxCount?: number): RequestHandler;
   };
   pluginInstallation: {
-    stageUploadedPluginZip(buffer: Buffer, source: string): Promise<{ ok?: boolean }>;
-    stageUploadedPluginFolder(files: Array<{ buffer: Buffer; originalname: string }>, rawPaths: unknown): Promise<{ ok?: boolean }>;
+    stageUploadedPluginZip(buffer: Buffer, source: string, scope?: {workspaceId:string;workspaceMemberId:string} | null): Promise<{ ok?: boolean }>;
+    stageUploadedPluginFolder(files: Array<{ buffer: Buffer; originalname: string }>, rawPaths: unknown, scope?: {workspaceId:string;workspaceMemberId:string} | null): Promise<{ ok?: boolean }>;
   };
   connectorService: unknown;
   resolvedPortRef: { current: number | null | undefined };
@@ -523,6 +524,8 @@ export function registerPluginRoutes(app: Express, deps: RegisterPluginRoutesDep
     helpers.pluginUpload.single('file')(req, res, async (err: unknown) => {
       if (err) return helpers.sendMulterError(res, err);
       try {
+        const authority=await resolveWorkspaceAuthority(req,res);
+        if(authority===undefined) return;
         const file = req.file;
         if (!file?.buffer) {
           return res.status(400).json(pluginUploadFailure('file is required', 'BAD_REQUEST'));
@@ -530,6 +533,7 @@ export function registerPluginRoutes(app: Express, deps: RegisterPluginRoutesDep
         const result = await helpers.pluginInstallation.stageUploadedPluginZip(
           file.buffer,
           `upload:zip:${helpers.decodeMultipartFilename(file.originalname || 'plugin.zip')}`,
+          authority,
         );
         return res.status(result.ok ? 200 : 400).json(result);
       } catch (cause) {
@@ -541,6 +545,8 @@ export function registerPluginRoutes(app: Express, deps: RegisterPluginRoutesDep
     helpers.pluginUpload.array('files', 500)(req, res, async (err: unknown) => {
       if (err) return helpers.sendMulterError(res, err);
       try {
+        const authority=await resolveWorkspaceAuthority(req,res);
+        if(authority===undefined) return;
         const files = Array.isArray(req.files)
           ? req.files as Array<{ buffer: Buffer; originalname: string }>
           : [];
@@ -550,6 +556,7 @@ export function registerPluginRoutes(app: Express, deps: RegisterPluginRoutesDep
         const result = await helpers.pluginInstallation.stageUploadedPluginFolder(
           files,
           req.body?.paths,
+          authority,
         );
         return res.status(result.ok ? 200 : 400).json(result);
       } catch (cause) {
@@ -643,10 +650,18 @@ export function registerPluginRoutes(app: Express, deps: RegisterPluginRoutesDep
       if (!source || !plugins.getLocalPluginBySource) {
         return res.status(404).json({ error: 'plugin not found' });
       }
+      let localAuthority:WorkspaceCollabContext|null=null;
+      if(helpers.requireScopedLocalSelection) {
+        const authority=await resolveWorkspaceAuthority(req,res);
+        if(authority===undefined) return;
+        const visible=await resolveRequestPlugin(req.params.id,authority);
+        if(!visible || visible.source!==source) return res.status(404).json({error:'plugin not found'});
+        localAuthority=authority;
+      }
       const plugin = await plugins.getLocalPluginBySource(db, req.params.id, source);
       if (!plugin) return res.status(404).json({ error: 'plugin not found' });
       const registry = await helpers.loadPluginRegistryView(
-        localPluginRegistryScope(plugin),
+        localAuthority ?? localPluginRegistryScope(plugin),
       );
       // Registry loading walks local Skill/Design System files asynchronously.
       // Re-resolve immediately before apply so a local reconciliation tombstone

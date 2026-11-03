@@ -8,6 +8,8 @@ import { CompanyAuth, companyProviderFingerprint, constantEqual, createLdapDirec
 import { loadCompanyConfig, type CompanyConfig } from './config.js';
 import { CompanyStore, type CompanyRevocation, type CompanyStoredSession } from './store.js';
 import { companyMemberPolicy, companyRequestIsWrite, companyTaskPolicy } from './policy.js';
+import { createCompanyTeamRoutes } from './team-routes.js';
+import { companyIntegrationRequest, createCompanyIntegrationRoutes } from './integrations.js';
 
 const COOKIE = 'od_company_session';
 const requestSessions = new WeakMap<Request, CompanyStoredSession>();
@@ -30,7 +32,7 @@ export interface CompanyRuntime {
   previewOwnerKey(req: Request): string;
   canAccess(user: CompanySessionUser | null, projectId: string, write?: boolean): boolean;
   filterProjects<T extends { id: string }>(req: Request, projects: T[]): T[];
-  claimProject(req: Request, projectId: string): void;
+  claimProject(req: Request, projectId: string, sourceProjectId?: string): void;
   registerProjectOwner(projectId: string, user: CompanyUser): void;
   onRevoke(listener: (event: CompanyRevocation) => void): () => void;
 }
@@ -42,6 +44,8 @@ export interface InitializeCompanyOptions {
   ldap?: CompanyLdap;
   now?: () => number;
   resolveRunProjectId?: (runId: string) => string | null;
+  projectIsBusy?: (projectId: string) => boolean;
+  taskStatus?: (user:CompanyUser) => import('@open-design/contracts').CompanyTaskStatusResponse;
   authenticateTask?: (req: Request) => CompanyTaskPrincipal | null;
   resolvePreviewOwner?: (req: Request) => {projectId: string; ownerKey: string} | null;
 }
@@ -72,8 +76,17 @@ export async function initializeCompany(options: InitializeCompanyOptions): Prom
     store.markEnabled();
   }
   const router = Router();
+  router.use(createCompanyIntegrationRoutes({config,store,auth,now:options.now ?? Date.now,issueSession(req,res,user) {
+    const previous = cookieToken(req);
+    // Opening another source project must not invalidate existing tabs' CSRF state.
+    if (previous && store.getSession(previous)?.user.id === user.id) return;
+    if (previous) store.deleteSession(previous);
+    sessionCookie(res,config,auth.createSession(user).token);
+  }}));
+  router.use(createCompanyTeamRoutes(store,config.enabled && config.teams?.enabled === true,getCompanyUser));
   const sessionResponse = (session: CompanyStoredSession | undefined): CompanySessionResponse => ({
     enabled: config.enabled,
+    teamsEnabled: config.enabled && config.teams?.enabled === true,
     ...(config.enabled ? { authMode: config.auth.mode } : {}),
     user: session ? { id: session.user.id, username: session.user.username, role: session.user.role, mustChangePassword: session.user.mustChangePassword } : null,
     presentation: config.presentation,
@@ -112,6 +125,19 @@ export async function initializeCompany(options: InitializeCompanyOptions): Prom
     // Express matches literal route prefixes without case sensitivity by default.
     if (!/^\/(?:api(?:\/|$)|artifacts(?:\/|$)|frames(?:\/|$)|powered(?:\/|$))/u.test(req.path)) return error(res, 403, 'Invalid request path');
     res.setHeader('Cache-Control', 'no-store');
+    if (config.teams?.enabled) store.teams.expire();
+    if (companyIntegrationRequest(req) && config.teams?.enabled && config.integrations?.length) return next();
+    if (/^\/api\/projects(?:\/[^/]+(?:\/duplicate)?)?$/u.test(req.path)) {
+      const json = res.json.bind(res);
+      const decorate = (project: {id:string}) => {
+        const actor=getCompanyUser(req);
+        return {...project,companyTeamId:store.teams.projectTeamId(project.id),...(actor ? {companyAccess:{
+          canWrite:store.canAccess(actor,project.id,true),canComment:store.canComment(actor,project.id),
+          canManage:store.canManage(actor,project.id),ownerUserId:store.teams.projectOwnerId(project.id),
+        }} : {})};
+      };
+      res.json = body => json(body?.project ? {...body,project:decorate(body.project)} : body?.projects ? {...body,projects:body.projects.map(decorate)} : body);
+    }
     const preview = options.resolvePreviewOwner?.(req);
     if (preview) {
       if (!['GET','HEAD'].includes(req.method)) return error(res,403,'Preview scope is read-only');
@@ -173,20 +199,31 @@ export async function initializeCompany(options: InitializeCompanyOptions): Prom
       if (!constantEqual(csrfToken, session.csrfToken)) return error(res, 403, 'Invalid CSRF token');
     }
     if (session.user.mustChangePassword && !['/api/company/auth/password', '/api/company/auth/logout'].includes(req.path)) return error(res, 403, 'Password change required');
+    if (req.method === 'POST' && req.path === '/api/projects' && req.body?.companyTeamId !== undefined) {
+      if (!config.teams?.enabled || typeof req.body.companyTeamId !== 'string' || !store.teams.canAccess(session.user,req.body.companyTeamId,true)) return error(res,403,'Team write permission required');
+    }
     if (session.user.role === 'admin') {
-      const projectId = /^\/api\/projects\/([^/]+)/u.exec(req.path)?.[1]
+      const policy = companyMemberPolicy(req, options.resolveRunProjectId);
+      const projectId = policy.projectId ?? /^\/api\/projects\/([^/]+)/u.exec(req.path)?.[1]
         ?? options.resolveRunProjectId?.(/^\/api\/runs\/([^/]+)/u.exec(req.path)?.[1] ?? '');
       if (projectId) store.audit(session.user.id, companyRequestIsWrite(req) ? 'admin.project.write' : 'admin.project.read', decodeURIComponent(projectId));
+      if (projectId && store.teams.projectTeamId(decodeURIComponent(projectId)) && !(policy.comment ? store.canComment(session.user,decodeURIComponent(projectId)) : store.canAccess(session.user,decodeURIComponent(projectId),policy.allowed ? policy.write : companyRequestIsWrite(req)))) return error(res,403,'Team is read-only');
       trackStream(res, token, session.user, projectId ? decodeURIComponent(projectId) : undefined);
       return next();
     }
     const policy = companyMemberPolicy(req, options.resolveRunProjectId);
-    if (!policy.allowed || (policy.projectId && (!store.canAccess(session.user, policy.projectId, policy.write) || (policy.ownerOnly && !store.canManage(session.user, policy.projectId))))) return error(res, 403, 'Access denied');
+    if (!policy.allowed || (policy.projectId && (!(policy.comment ? store.canComment(session.user,policy.projectId) : store.canAccess(session.user, policy.projectId, policy.write)) || (policy.ownerOnly && !store.canManage(session.user, policy.projectId))))) return error(res, 403, 'Access denied');
     trackStream(res, token, session.user, policy.projectId);
     next();
   };
 
   router.get('/api/company/session', (req, res) => res.json(sessionResponse(requestSessions.get(req))));
+  router.get('/api/company/tasks',(req,res)=>{
+    const user=getCompanyUser(req);
+    if(!config.enabled || !user) return error(res,401,'Authentication required');
+    if(!options.taskStatus) return void res.status(503).json({error:'Task status is unavailable'});
+    res.json(options.taskStatus(user));
+  });
   router.post('/api/company/auth/login', async (req, res) => {
     if (!config.enabled) return error(res, 400, 'Company authentication is disabled');
     const { username, password } = req.body ?? {};
@@ -264,7 +301,32 @@ export async function initializeCompany(options: InitializeCompanyOptions): Prom
     if (!actor) return;
     const projectId = req.params.id!;
     if (!store.canAccess(actor, projectId)) return error(res, 403, 'Access denied');
-    res.json({ members: store.members(projectId), canManage: store.canManage(actor, projectId) });
+    const teamId = store.teams.projectTeamId(projectId);
+    res.json({ members: store.members(projectId), canManage: !teamId && store.canManage(actor, projectId), canWrite:store.canAccess(actor,projectId,true), canComment:store.canComment(actor,projectId),ownerUserId:store.teams.projectOwnerId(projectId), ...(teamId ? {team:store.teams.get(teamId,actor)} : {}) });
+  });
+  // Internal sharing uses project membership. Preserve the original deletion
+  // preflight and report any retained public links from the local store.
+  router.get('/api/projects/:id/share-state', (req,res,next) => {
+    if(!config.enabled) return next();
+    const actor=requireUser(req,res),projectId=req.params.id!;
+    if(!actor) return;
+    if(!store.canAccess(actor,projectId)) return error(res,403,'Access denied');
+    const publications=store.database.prepare('SELECT file_path AS sourceFilePath,slug FROM public_file_publications WHERE project_id=?')
+      .all(projectId) as Array<{sourceFilePath:string;slug:string}>;
+    res.setHeader('Cache-Control','no-store');
+    res.json({projectId,bindingExists:publications.length>0,hasEverShared:publications.length>0,
+      publications:publications.map(row=>({...row,status:'active'}))});
+  });
+  router.post('/api/company/projects/:id/move', (req,res) => {
+    const actor=requireUser(req,res);
+    if (!actor) return;
+    if (!config.teams?.enabled) return error(res,404,'Teams are not enabled');
+    const projectId=req.params.id!,teamId=req.body?.companyTeamId;
+    if (teamId !== null && (typeof teamId !== 'string' || !teamId)) return error(res,400,'companyTeamId must be a team ID or null');
+    if (!store.canManage(actor,projectId)) return error(res,403,'Project owner or team administrator required');
+    if (options.projectIsBusy?.(projectId)) return void res.status(409).json({error:'请先停止此项目的运行或排队任务',code:'PROJECT_BUSY'});
+    try { store.teams.moveProject(projectId,teamId,actor);res.json({projectId,companyTeamId:store.teams.projectTeamId(projectId)}); }
+    catch { error(res,403,'Cannot change project ownership'); }
   });
   const updateMember: RequestHandler = (req, res) => {
     const actor = requireUser(req, res);
@@ -272,6 +334,7 @@ export async function initializeCompany(options: InitializeCompanyOptions): Prom
     const projectId = String(req.params.id);
     const userId = req.params.userId ?? req.body?.userId;
     const role = req.body?.role as CompanyProjectRole;
+    if (store.teams.projectTeamId(projectId)) return error(res,403,'Manage membership in the team');
     if (!store.canManage(actor, projectId)) return error(res, 403, 'Project owner required');
     if (typeof userId !== 'string' || !['owner', 'editor', 'viewer'].includes(role) || !store.getUser(userId)) return error(res, 400, 'Invalid project member');
     if (role === 'owner' || store.projectRole(projectId, userId) === 'owner') return error(res, 400, 'Project owner cannot be changed');
@@ -285,6 +348,7 @@ export async function initializeCompany(options: InitializeCompanyOptions): Prom
     if (!actor) return;
     const projectId = req.params.id!;
     const userId = req.params.userId!;
+    if (store.teams.projectTeamId(projectId)) return error(res,403,'Manage membership in the team');
     if (!store.canManage(actor, projectId)) return error(res, 403, 'Project owner required');
     if (store.projectRole(projectId, userId) === 'owner') return error(res, 400, 'Project owner cannot be removed');
     store.removeMember(projectId, userId, actor.id);
@@ -324,11 +388,15 @@ export async function initializeCompany(options: InitializeCompanyOptions): Prom
     },
     canAccess: (principal, projectId, write = false) => !config.enabled || store.canAccess(principal, projectId, write),
     filterProjects: (req, projects) => !config.enabled ? projects : projects.filter((project) => store.canAccess(getCompanyUser(req), project.id)),
-    claimProject: (req, projectId) => {
+    claimProject: (req, projectId, sourceProjectId) => {
       if (!config.enabled) return;
       const principal = getCompanyUser(req);
       if (!principal) throw new Error('Company project owner is required');
-      store.registerProjectOwner(projectId, principal);
+      const teamId = sourceProjectId ? store.teams.projectTeamId(sourceProjectId) : req.body?.companyTeamId;
+      if (teamId) {
+        if (!config.teams?.enabled || typeof teamId !== 'string') throw new Error('Teams are not enabled');
+        store.teams.attach(projectId,teamId,principal);
+      } else store.registerProjectOwner(projectId, principal);
     },
     registerProjectOwner: (projectId, principal) => { if (config.enabled) store.registerProjectOwner(projectId, principal); },
     onRevoke: (listener) => store.onRevoke(listener),

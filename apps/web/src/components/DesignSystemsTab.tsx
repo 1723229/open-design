@@ -16,7 +16,7 @@ import type {
   TrackingDesignSystemStatusValue,
 } from '@open-design/contracts/analytics';
 import { useI18n } from '../i18n';
-import { useWorkspaceContext } from '../collab/useWorkspaceContext';
+import { useResourceWorkspaceContext as useWorkspaceContext } from '../company/CompanyResourceContext';
 import {
   beginWorkspaceResourceScopedRead,
   beginWorkspaceScopedRead,
@@ -230,7 +230,7 @@ export function DesignSystemsTab({
   const workspaceIdentity = workspaceIdentityCacheKey(workspaceContext);
   // Personal and Team workspaces both have member-shared resources.
   // Only an exact workspace/member identity can expose this collection.
-  const hasSharedWorkspace = workspaceContextHasWorkspaceIdentity(workspaceContext);
+  const hasSharedWorkspace = workspaceContextHasWorkspaceIdentity(workspaceContext) && !(workspaceContext?.identitySource==='company' && workspaceContext.workspaceType==='personal');
   useEffect(() => {
     if (designSystemCollection === 'team' && !hasSharedWorkspace) setDesignSystemCollection('mine');
   }, [designSystemCollection, hasSharedWorkspace]);

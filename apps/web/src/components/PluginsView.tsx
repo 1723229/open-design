@@ -1,3 +1,4 @@
+import { useCompany } from '../company/CompanyProvider';
 import { readCachedVisiblePlugins } from '../state/projects';
 import { usePageNavigationReady } from '../observability/navigation-timing';
 import {
@@ -93,9 +94,9 @@ import { navigate } from '../router';
 import {
   beginWorkspaceScopedRead,
   currentWorkspaceAccountGeneration,
-  useWorkspaceContext,
   workspaceIdentityCacheKey,
 } from '../collab/useWorkspaceContext';
+import {useResourceWorkspaceContext as useWorkspaceContext} from '../company/CompanyResourceContext';
 import {
   useWorkspaceInvalidation,
 } from '../collab/workspace-events';
@@ -1037,6 +1038,7 @@ export function ExtensionsMarketplace({
   onUsePlugin,
   onUseSkill,
 }: ExtensionsMarketplaceProps) {
+  const company = useCompany();
   const { locale, t } = useI18n();
   const analytics = useAnalytics();
   // My own member id, to keep the Personal tab to resources I actually own.
@@ -1059,7 +1061,7 @@ export function ExtensionsMarketplace({
   const myMemberId = workspaceContext?.workspaceMemberId ?? null;
   // Shared resources belong to a verified workspace, including Personal.
   // Plan and workspace type do not replace the server's member permissions.
-  const hasSharedWorkspace = workspaceContextHasWorkspaceIdentity(workspaceContext);
+  const hasSharedWorkspace = workspaceContextHasWorkspaceIdentity(workspaceContext) && !(workspaceContext?.identitySource==='company' && workspaceContext.workspaceType==='personal');
   const pageViewFiredRef = useRef(false);
   useEffect(() => {
     if (!isActive) return;
@@ -1068,7 +1070,8 @@ export function ExtensionsMarketplace({
     trackPageView(analytics.track, { page_name: 'plugins' });
   }, [analytics.track, isActive]);
 
-  const [mode, setMode] = useState<MarketMode>('plugins');
+  const [selectedMode, setMode] = useState<MarketMode>('plugins');
+  const mode = company.enabled ? 'skills' : selectedMode;
   // #5517 lands on the official catalog first — a new workspace's personal
   // scope is empty, and the official list is the marketplace's front door.
   const [scope, setScope] = useState<MarketScope>('official');
@@ -2093,7 +2096,7 @@ export function ExtensionsMarketplace({
         <div>
           {/* #5517: a bare 扩展 heading — no lede paragraph. */}
           <h1 id="plugin-marketplace-title" className="entry-section__title">
-            {t('entry.navPlugins')}
+            {t(company.enabled ? 'pluginsView.kind.skills' : 'entry.navPlugins')}
           </h1>
         </div>
         {onCreatePlugin ? (
@@ -2110,7 +2113,7 @@ export function ExtensionsMarketplace({
         ) : null}
       </header>
 
-      <div className="plugin-marketplace__toolbar">
+      {!company.enabled ? <div className="plugin-marketplace__toolbar">
         <div className="plugin-marketplace__switch" aria-label={t('pluginsView.marketplaceModeAria')}>
           <button
             type="button"
@@ -2136,7 +2139,7 @@ export function ExtensionsMarketplace({
             {t('pluginsView.kind.skills')}
           </button>
         </div>
-      </div>
+      </div> : null}
 
       {/* #5517 drops the mode-note lede line under the tabs. */}
 
@@ -2510,7 +2513,7 @@ export function ExtensionsMarketplace({
                 <Icon name="close" size={15} />
               </button>
             </header>
-            <div className="plugin-marketplace__create-tabs" aria-label={t('pluginsView.createTypeAria')}>
+            {!company.enabled ? <div className="plugin-marketplace__create-tabs" aria-label={t('pluginsView.createTypeAria')}>
               <button
                 type="button"
                 className={createKind === 'plugin' ? 'is-active' : ''}
@@ -2525,7 +2528,7 @@ export function ExtensionsMarketplace({
               >
                 {t('pluginsView.createKindSkill')}
               </button>
-            </div>
+            </div> : null}
             <div className="plugin-marketplace__create-options">
               {/* Authoring by describing what you want is the flow the home
                   composer is built around, and it had no reachable entry: the

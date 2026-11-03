@@ -1,5 +1,7 @@
 import { SHOW_OFFICIAL_CLOUD, SHOW_UPSTREAM_LINKS } from './product';
 import { useCompany } from './company/CompanyProvider';
+import {COMPANY_PROJECT_MOVED_EVENT} from './company/CompanyProjectMove';
+import {useResourceWorkspaceContext} from './company/CompanyResourceContext';
 import { WorkspaceRemovalBoundary } from './components/WorkspaceRemovalBoundary';
 import { homeAutoSendIdentity, type HomeRequestConcurrencyRejection } from './runtime/home-auto-send-identity';
 import { AmrConcurrencyDialog } from './components/AmrConcurrencyDialog';
@@ -1002,6 +1004,11 @@ function AppInner() {
   const hostPlatform = useMemo(() => getOpenDesignHost()?.client.platform, []);
   useModalWindowDragGuard();
   const workspaceContextState = useWorkspaceContext();
+  const resourceContextState=useResourceWorkspaceContext();
+  const resourceContextRef=useRef(resourceContextState.context);
+  const resourceContextStateRef=useRef(resourceContextState);
+  resourceContextRef.current=resourceContextState.context;
+  resourceContextStateRef.current=resourceContextState;
   const {
     context: workspaceContext,
     loading: workspaceContextLoading,
@@ -1013,9 +1020,9 @@ function AppInner() {
   // previous context while the replacement account is resolved; a pending
   // sentinel makes that retained context unusable for display immediately.
   const currentWorkspaceCatalogIdentity = JSON.stringify(
-    workspaceContextState.identityChangePending
+    resourceContextState.identityChangePending
       ? ['pending-account', workspaceAccountGeneration]
-      : ['workspace-account', workspaceAccountGeneration, currentWorkspaceIdentity],
+      : ['workspace-account', workspaceAccountGeneration, workspaceIdentityCacheKey(resourceContextState.context)],
   );
   const workspaceContextRef = useRef<WorkspaceCollabContext | null>(null);
   const workspaceContextStateRef = useRef(workspaceContextState);
@@ -2538,11 +2545,11 @@ function AppInner() {
         markSkillRegistryReady('templates');
       });
 
-      const designSystemsContext = workspaceContextRef.current;
+      const designSystemsContext = resourceContextRef.current;
       // A cached workspace identity already has an SSE lifecycle owner below. Do
       // not race an eager bootstrap snapshot against its first onActive; the
       // 250ms fallback covers shells where the stream never opens.
-      if (!workspaceContextHasWorkspaceIdentity(designSystemsContext)) {
+      if (!company.enabled && !workspaceContextHasWorkspaceIdentity(designSystemsContext)) {
         const designSystemsWorkspaceIdentity = workspaceIdentityCacheKey(designSystemsContext);
         const designSystemsAccountGeneration = currentWorkspaceAccountGeneration();
         const designSystemsCatalogIdentity = JSON.stringify([
@@ -2560,11 +2567,11 @@ function AppInner() {
         void fetchDesignSystems(designSystemsContext, { onReadResult: success => { ready = success; } }).then((list) => {
             if (
               cancelled ||
-              workspaceContextStateRef.current.identityChangePending ||
+              resourceContextStateRef.current.identityChangePending ||
               designSystemsRequestGenerationRef.current.get(designSystemsCatalogIdentity)
                 !== designSystemsRequestGeneration ||
               currentWorkspaceAccountGeneration() !== designSystemsAccountGeneration ||
-              workspaceIdentityCacheKey(workspaceContextRef.current)
+              workspaceIdentityCacheKey(resourceContextRef.current)
                 !== designSystemsWorkspaceIdentity
             ) return;
             setWorkspaceDesignSystems({
@@ -2842,6 +2849,12 @@ function AppInner() {
     () => refreshProjectsStrict().catch(() => {}),
     [refreshProjectsStrict],
   );
+  useEffect(()=>{
+    if(!company.enabled) return;
+    const refresh=()=>{void refreshProjects();};
+    window.addEventListener(COMPANY_PROJECT_MOVED_EVENT,refresh);
+    return()=>window.removeEventListener(COMPANY_PROJECT_MOVED_EVENT,refresh);
+  },[company.enabled,refreshProjects]);
 
   const refreshProjectsAfterTeamCatalogChange = useCallback(() => {
     const context = workspaceContextRef.current;
@@ -2927,8 +2940,8 @@ function AppInner() {
     // verifies that exact membership instead of consulting mutable ambient
     // Workspace state, and the same identity key prevents an A response from
     // committing after the UI has moved to B.
-    if (workspaceContextStateRef.current.identityChangePending) return;
-    const issuedContext = workspaceContextRef.current;
+    if (resourceContextStateRef.current.identityChangePending) return;
+    const issuedContext = resourceContextRef.current;
     const issuedIdentity = workspaceIdentityCacheKey(issuedContext);
     const issuedAccountGeneration = currentWorkspaceAccountGeneration();
     const issuedCatalogIdentity = JSON.stringify([
@@ -2942,11 +2955,11 @@ function AppInner() {
     let ready = true;
     const list = await fetchDesignSystems(issuedContext, { ...options, onReadResult: success => { ready = success; } });
     if (
-      workspaceContextStateRef.current.identityChangePending
+      resourceContextStateRef.current.identityChangePending
       || designSystemsRequestGenerationRef.current.get(issuedCatalogIdentity)
         !== requestGeneration
       || currentWorkspaceAccountGeneration() !== issuedAccountGeneration
-      || workspaceIdentityCacheKey(workspaceContextRef.current) !== issuedIdentity
+      || workspaceIdentityCacheKey(resourceContextRef.current) !== issuedIdentity
     ) return;
     setWorkspaceDesignSystems({ identity: issuedCatalogIdentity, items: list, ready });
     // Bootstrap and this workspace-scoped refresh can overlap on launch.
@@ -2960,14 +2973,15 @@ function AppInner() {
   // identity. Re-read whenever either half changes; a role replacement can
   // reuse the Workspace id while changing the authoritative membership.
   useEffect(() => {
-    if (workspaceContextState.identityChangePending) return;
-    if (workspaceContextHasWorkspaceIdentity(workspaceContext)) return;
+    if (resourceContextState.identityChangePending || (company.enabled && resourceContextState.loading)) return;
+    if (workspaceContextHasWorkspaceIdentity(resourceContextState.context) && resourceContextState.context?.identitySource!=='company') return;
     void refreshDesignSystems();
   }, [
     currentWorkspaceCatalogIdentity,
     refreshDesignSystems,
-    workspaceContext?.workspaceType,
-    workspaceContextState.identityChangePending,
+    resourceContextState.context?.workspaceType,
+    resourceContextState.identityChangePending,
+    resourceContextState.loading,
   ]);
 
   const refreshSkills = useCallback(async () => {
@@ -2976,9 +2990,9 @@ function AppInner() {
     // headerless read is not the "unfiltered" list — it is the list with every
     // workspace-claimed skill removed, including the ones claimed by the
     // workspace the user is actually in.
-    if (workspaceContextStateRef.current.identityChangePending) return;
+    if (resourceContextStateRef.current.identityChangePending) return;
     const issuedAccountGeneration = currentWorkspaceAccountGeneration();
-    const read = beginWorkspaceScopedRead(workspaceContextRef.current);
+    const read = beginWorkspaceScopedRead(resourceContextRef.current);
     const issuedCatalogIdentity = JSON.stringify([
       'workspace-account',
       issuedAccountGeneration,
@@ -2994,10 +3008,10 @@ function AppInner() {
     // Skipping the gate too is deliberate: this response is not an answer about
     // the current identity, and the newer read that replaced it will mark it.
     if (
-      workspaceContextStateRef.current.identityChangePending
+      resourceContextStateRef.current.identityChangePending
       || skillsRequestGenerationRef.current.get(issuedCatalogIdentity) !== requestGeneration
       || currentWorkspaceAccountGeneration() !== issuedAccountGeneration
-      || !read.isStillCurrent(workspaceContextRef.current)
+      || !read.isStillCurrent(resourceContextRef.current)
     ) return;
     setWorkspaceSkills({
       identity: issuedCatalogIdentity,
@@ -3033,18 +3047,25 @@ function AppInner() {
   const skillsReadIdentity = currentWorkspaceCatalogIdentity;
   const skillsReadIdentityRef = useRef<string | null>(null);
   useEffect(() => {
-    if (workspaceContextLoading || workspaceContextState.identityChangePending) return;
+    if (resourceContextState.loading || resourceContextState.identityChangePending) return;
     if (skillsReadIdentityRef.current === skillsReadIdentity) return;
     skillsReadIdentityRef.current = skillsReadIdentity;
-    if (workspaceContextHasWorkspaceIdentity(workspaceContext)) return;
+    if (workspaceContextHasWorkspaceIdentity(resourceContextState.context) && resourceContextState.context?.identitySource!=='company') return;
     void refreshSkills();
   }, [
-    workspaceContextLoading,
-    workspaceContextState.identityChangePending,
+    resourceContextState.loading,
+    resourceContextState.identityChangePending,
     skillsReadIdentity,
     refreshSkills,
-    workspaceContext?.workspaceType,
+    resourceContextState.context?.workspaceType,
   ]);
+
+  useEffect(()=>{
+    if(!company.enabled || resourceContextState.loading || resourceContextState.failure) return;
+    const refresh=()=>{if(document.visibilityState!=='hidden'){void refreshSkills();void refreshDesignSystems();}};
+    const timer=window.setInterval(refresh,15_000);window.addEventListener('focus',refresh);
+    return()=>{window.clearInterval(timer);window.removeEventListener('focus',refresh);};
+  },[company.enabled,currentWorkspaceCatalogIdentity,resourceContextState.loading,resourceContextState.failure,refreshSkills,refreshDesignSystems]);
 
   const refreshTemplates = useCallback(async () => {
     const list = await listTemplates();
@@ -3595,6 +3616,7 @@ function AppInner() {
           ...(optimisticProjectId ? { id: optimisticProjectId } : {}),
           ...(optimisticConversationId ? { conversationId: optimisticConversationId } : {}),
           name: input.name,
+          ...(input.companyTeamId ? {companyTeamId:input.companyTeamId} : {}),
           skillId: input.skillId,
           ...(input.skillCatalogScope
             ? { skillCatalogScope: input.skillCatalogScope }
@@ -4722,7 +4744,8 @@ function AppInner() {
   // can leave an in-app history entry that points back to the same project.
   const handleBack = useCallback(() => {
     const currentProjectId = route.kind === 'project' ? route.projectId : null;
-    navigate({ kind: 'home', view: 'home' }, {
+    const companyTeamId = projectsRef.current.find(project => project.id === currentProjectId)?.companyTeamId;
+    navigate({ kind: 'home', view: 'home', ...(companyTeamId ? {companyTeamId} : {}) }, {
       onCommit: () => {
         if (!currentProjectId) return;
         iframeKeepAlivePool.evictProject(currentProjectId, { includeActive: true });
@@ -5438,10 +5461,17 @@ function AppInner() {
     recordProjectListFailure,
   ]);
 
+  useEffect(() => {
+    if (company.isMember && route.kind === 'home' && route.view === 'settings') {
+      navigate({ kind: 'home', view: 'home', ...(route.companyTeamId ? { companyTeamId: route.companyTeamId } : {}) }, { replace: true });
+    }
+  }, [company.isMember, route]);
+
   const openSettings = useCallback((
     section: SettingsSection = 'execution',
     opts?: { highlight?: SettingsHighlight },
   ) => {
+    if (company.isMember) return;
     if (section === 'composio' || section === 'mcpClient' || section === 'integrations') {
       settingsReturnTargetRef.current = null;
       setIntegrationInitialTab(
@@ -5455,6 +5485,8 @@ function AppInner() {
       return;
     }
     const currentRoute = routeRef.current;
+    const companyTeamId = currentRoute.kind === 'home' ? currentRoute.companyTeamId
+      : currentRoute.kind === 'project' ? projectsRef.current.find(project => project.id === currentRoute.projectId)?.companyTeamId : undefined;
     settingsReturnTargetRef.current =
       currentRoute.kind === 'project' && identityScopeKey !== null
         ? {
@@ -5466,8 +5498,8 @@ function AppInner() {
     setSettingsWelcome(false);
     setSettingsInitialSection(section);
     setSettingsHighlight(opts?.highlight ?? null);
-    navigate({ kind: 'home', view: 'settings' });
-  }, [identityScopeKey]);
+    navigate({ kind: 'home', view: 'settings', ...(companyTeamId ? {companyTeamId} : {}) });
+  }, [identityScopeKey, company.isMember]);
 
   // Entry point from the failed-run AMR nudge: open Settings on the execution
   // section and flag the AMR agent card for a one-shot scroll-into-view +
@@ -5695,7 +5727,7 @@ function AppInner() {
     await syncConfigToDaemon(next, { allowOnboardingReset: true });
   }, []);
 
-  const renderSettingsSurface = (presentation: 'modal' | 'page') => company.enabled && !daemonConfigLoaded
+  const renderSettingsSurface = (presentation: 'modal' | 'page') => company.isMember ? null : company.enabled && !daemonConfigLoaded
     ? <CenteredLoader label={t('entry.loadingWorkspace')} /> : (
     <SettingsDialog
       presentation={presentation}

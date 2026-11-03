@@ -1,4 +1,5 @@
 import { useCompany } from '../company/CompanyProvider';
+import { useCompanyProjectAccess } from '../company/useCompanyProjectReadOnly';
 import { CompanySharingDialog } from '../company/CompanyControls';
 import { SHOW_OFFICIAL_CLOUD } from '../product';
 import { validateCommentSaveTarget } from '../comments/validate-save-target';
@@ -7361,6 +7362,7 @@ function HtmlViewer({
   manualEditEntryAllowed?: boolean;
 }) {
   const company = useCompany();
+  const companyAccess = useCompanyProjectAccess(projectId);
   const { locale, t } = useI18n();
   const iframeKeepAlivePool = useIframeKeepAlivePool();
   // Retained viewers prewarm new file revisions behind the active tab. Keeping
@@ -15458,6 +15460,7 @@ function HtmlViewer({
   }
 
   function activateCommentTool() {
+    if(company.enabled && !companyAccess.canComment) return;
     fireArtifactToolbarClick('comment');
     void capturePreviewScrollPosition();
     if (boardMode && !commentCreateMode && boardTool === 'inspect') {
@@ -16954,11 +16957,12 @@ function HtmlViewer({
   // current user's to act on, so it reads as "mine". Only the author may EDIT
   // their own note; the author OR the project owner may delete it or send it to
   // the agent. The B lane enforces the same rules server-side.
-  const myMemberId = collab.member?.memberId ?? null;
+  const myMemberId = company.enabled ? company.user?.id ?? null : collab.member?.memberId ?? null;
   const commentAuthority: CommentAuthorityContext = {
     viewerMemberId: myMemberId,
-    collabEnabled: collab.enabled,
-    isProjectOwner: collab.isOwner,
+    collabEnabled: company.enabled || collab.enabled,
+    isProjectOwner: company.enabled ? companyAccess.canManage : collab.isOwner,
+    ...(company.enabled ? {canComment:companyAccess.canComment,canSendToAgent:!companyAccess.readOnly} : {}),
   };
   const canSendCommentToAgent = (comment: PreviewComment | null | undefined): boolean =>
     canSendCommentToAgentPure(comment, commentAuthority);
@@ -16971,10 +16975,10 @@ function HtmlViewer({
   // on a personal workspace and on an unshared project, i.e. exactly the cases
   // where a comment lost its avatar and name.
   const commentAuthorSelf = useMemo(
-    () => currentUserDirectoryEntry(
+    () => company.enabled && company.user ? {memberId:company.user.id,displayName:company.user.username,role:'member' as const} : currentUserDirectoryEntry(
       projectResourceReadBlocked ? null : workspaceContext,
     ),
-    [workspaceContext, projectResourceReadBlocked],
+    [workspaceContext, projectResourceReadBlocked,company.enabled,company.user?.id,company.user?.username],
   );
   const commentComposerPortalMetrics = (() => {
     if (!commentComposerHost || !commentPreviewCanvasNode) return null;
@@ -17436,6 +17440,7 @@ function HtmlViewer({
                   type="button"
                   className={`viewer-action viewer-action-icon viewer-comment-toggle od-tooltip${boardMode && !commentCreateMode && boardTool === 'inspect' ? ' active' : ''}`}
                   data-testid="board-mode-toggle"
+                  disabled={company.enabled && !companyAccess.canComment}
                   data-tooltip={t('fileViewer.comment')}
                   data-tooltip-placement="bottom"
                   title={t('fileViewer.comment')}
@@ -17769,12 +17774,12 @@ function HtmlViewer({
               // ever led to an empty panel. This supersedes recvq56vFjQKfT,
               // which had un-gated the entry on the reasoning that browsing
               // history is a read action.
-              disabled={source === null || viewerOnly}
+              disabled={source === null || (viewerOnly && !company.enabled)}
               aria-label={t('fileViewer.versions.entry')}
               aria-expanded={Boolean(versionModalOpen)}
-              data-tooltip={viewerOnly ? viewerOnlyDisabledTitle : t('fileViewer.versions.entryFull')}
+              data-tooltip={viewerOnly && !company.enabled ? viewerOnlyDisabledTitle : t('fileViewer.versions.entryFull')}
               data-tooltip-placement="bottom"
-              title={viewerOnly ? viewerOnlyDisabledTitle : t('fileViewer.versions.entryFull')}
+              title={viewerOnly && !company.enabled ? viewerOnlyDisabledTitle : t('fileViewer.versions.entryFull')}
               onClick={() => {
                 // The version history is a floating panel now, not a modal, so
                 // the toolbar icon is a toggle: a second click dismisses it.

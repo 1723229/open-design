@@ -4,6 +4,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { createRef, useState, type ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const company = vi.hoisted(() => ({ enabled: false, isMember: false }));
+vi.mock('../../src/company/CompanyProvider', () => ({ useCompany: () => company }));
+
 const trackChatPanelClickMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../src/analytics/events', async (importOriginal) => {
@@ -197,6 +200,7 @@ function projectPatchBodies(): Array<{ metadata?: { linkedDirs?: string[] } }> {
 // every editor-text assertion (it walks the tree and emits real `\n`s).
 
 beforeEach(() => {
+  company.enabled = false;
   trackChatPanelClickMock.mockClear();
   plugins = [COMMUNITY_PLUGIN, USER_PLUGIN];
   skills = [SKILL];
@@ -350,6 +354,22 @@ describe('ChatComposer context pickers', () => {
     await waitFor(() => expect(onSend).toHaveBeenCalled());
     const meta = onSend.mock.calls[0]?.[3];
     expect(meta?.context?.workspaceItems).toEqual([browserContext]);
+  });
+
+  it('keeps company skills and MCP selectable while hiding plugin and connector results', async () => {
+    company.enabled = true;
+    const onProjectSkillChange = vi.fn();
+    renderComposer({ onProjectSkillChange });
+    await flushMounts();
+    await typeAndSettle('@');
+    const picker = await screen.findByTestId('mention-popover');
+    expect(within(picker).getAllByRole('tab').map(tab => tab.textContent)).toEqual(['All', 'Design files', 'Tabs', 'Skills', 'MCP']);
+    expect(within(picker).queryByText('Community Deck')).toBeNull();
+    expect(within(picker).queryByText('My Export')).toBeNull();
+    expect(within(picker).getByText('Slack MCP')).toBeTruthy();
+    await typeAndSettle('@deck');
+    pressEnter();
+    await waitFor(() => expect(onProjectSkillChange).toHaveBeenCalledWith('deck-builder'));
   });
 
   it('opens the @ panel even when every source is empty', async () => {

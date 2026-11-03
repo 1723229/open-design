@@ -101,7 +101,7 @@ import type { FrozenSkillPackageV1 } from '../strategies/od-next/frozen-skill-pa
 import { InvalidFrozenSkillPackageError } from '../strategies/od-next/frozen-skill-package.js';
 import type { ResolvedExamplePluginRecord } from '../strategies/od-next/example-skill-source.js';
 import { captureOdNextSessionSkillPackage } from '../strategies/od-next/session-skill-package.js';
-import { resolveSkillCatalogScope } from '../skill-catalog-scope.js';
+import { resolveSkillCatalogScope, type SkillCatalogScope } from '../skill-catalog-scope.js';
 import type { SkillInfo } from '../skills.js';
 import {
   buildOdNextTaskConfigurationV1,
@@ -376,6 +376,7 @@ interface RunCreateMeta extends InternalRunCreateInput, JsonRecord {
   appliedPluginSnapshotId?: string;
   message?: string;
   currentPrompt?: string;
+  companyActorId?: string;
   projectMetadata?: ProjectMetadata;
   workspaceScope?: RunWorkspaceScope | null;
   odNextTaskInputSnapshot?: OdNextTaskInputSnapshotDescriptor | null;
@@ -577,6 +578,8 @@ function automaticOdNextFallbackDecision(
 }
 
 export interface RegisterRunRoutesDeps {
+  companyActorId?: (req: Request) => string | null;
+  resolveRunSkillCatalogScope?: (req:Request,projectId:string)=>SkillCatalogScope|null;
   db: SqliteDb;
   design: RunRoutesDesignService;
   resources: RunRoutesSkillCatalogService;
@@ -1934,6 +1937,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       mediaExecution: mediaExecution.policy,
       toolBundle: toolBundle.bundle,
       ...(effectiveAgentId ? { agentId: effectiveAgentId } : {}),
+      ...(ctx.companyActorId?.(req) ? { companyActorId: ctx.companyActorId(req)! } : {}),
       // Always replace any untrusted request field, including with null for an
       // unbound project.
       workspaceScope: preparedWorkspaceScope,
@@ -2447,7 +2451,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
           skillIds: requestBody.skillIds,
         },
         listSkillCatalog: () => ctx.resources.listAllSkillLikeEntries(
-          resolveSkillCatalogScope({
+          ctx.resolveRunSkillCatalogScope ? ctx.resolveRunSkillCatalogScope(req,String(requestBody.projectId ?? '')) ?? undefined : resolveSkillCatalogScope({
             metadata: runProjectMetadata,
             workspaceBinding: typeof requestBody.projectId === 'string' && requestBody.projectId
               ? ctx.projectStore?.getWorkspaceProjectByProjectId(db, requestBody.projectId)

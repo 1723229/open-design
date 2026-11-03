@@ -42,7 +42,10 @@ function isValidArtifactOrigin(origin: ArtifactOrigin): boolean {
   return true;
 }
 
-export async function artifactVersionContentDigest(content: string): Promise<string> {
+export async function artifactVersionContentDigest(content: string): Promise<string | undefined> {
+  // HTTP LAN deployments have no Web Crypto digest. Provenance is optional;
+  // keep it unknown rather than blocking the edit/export or guessing a match.
+  if (!globalThis.crypto?.subtle) return undefined;
   const bytes = new TextEncoder().encode(String(content ?? ''));
   const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -75,6 +78,9 @@ export async function artifactExportOriginProps(
     return { ...unknownBase, artifact_origin_status: 'unknown' };
   }
   const actualDigest = await artifactVersionContentDigest(content);
+  if (actualDigest === undefined) {
+    return { ...unknownBase, artifact_origin_status: 'unknown' };
+  }
   if (actualDigest !== version.contentDigest) {
     return { ...unknownBase, artifact_origin_status: 'digest_mismatch' };
   }

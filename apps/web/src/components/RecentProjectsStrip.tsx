@@ -1,4 +1,5 @@
 import { compareRecentProjects } from '../lib/project-order';
+import {CompanyProjectMoveMenuItem,useCompanyProjectMove} from '../company/CompanyProjectMove';
 import { reportProjectFailure } from '../observability/experience-diagnostics';
 // Horizontal "Recent projects" rail for the Home view.
 //
@@ -376,6 +377,7 @@ export function RecentProjectsStrip({
   const t = useT();
   const analytics = useAnalytics();
   const analyticsPage = space === 'drafts' ? 'drafts' : space === 'team' ? 'all_projects' : 'home';
+  const companyMove=useCompanyProjectMove();
   const rowRef = useRef<HTMLDivElement | null>(null);
   // Real creator resolution (replaces the demo's mock 李娜/张伟 roster): the
   // member directory turns an ownerMemberId into a display name, while the
@@ -666,7 +668,7 @@ export function RecentProjectsStrip({
   // Same gate as the per-card menu: only your own projects can be moved or
   // deleted, so a selection containing someone else's shared project disables
   // the mutations instead of half-applying them.
-  const selectionHasForeignProject = selectedProjects.some(({ creator }) => !creator.ownedBySelf);
+  const selectionHasForeignProject = selectedProjects.some(({ creator,project }) => project.companyAccess ? !project.companyAccess.canManage : !creator.ownedBySelf);
   const bulkMutationDisabled = selectedCount === 0 || selectionHasForeignProject;
   const bulkMutationTitle = selectionHasForeignProject
     ? t('recentProjects.ownOnlyMutation')
@@ -1762,7 +1764,7 @@ export function RecentProjectsStrip({
                         <button
                           type="button"
                           role="menuitem"
-                          disabled={!creator.ownedBySelf}
+                          disabled={project.companyAccess ? !project.companyAccess.canWrite : !creator.ownedBySelf}
                           title={creator.ownedBySelf ? undefined : t('recentProjects.ownOnlyMutation')}
                           onClick={() => startRename(project)}
                         >
@@ -1782,7 +1784,7 @@ export function RecentProjectsStrip({
                         <button
                           type="button"
                           role="menuitem"
-                          disabled={!creator.ownedBySelf}
+                          disabled={project.companyAccess ? !project.companyAccess.canWrite : !creator.ownedBySelf}
                           title={creator.ownedBySelf ? undefined : t('recentProjects.ownOnlyMutation')}
                           onClick={() => requestDuplicate(project)}
                         >
@@ -1798,6 +1800,7 @@ export function RecentProjectsStrip({
                           the same gate the bulk toolbar's move actions
                           already use (canBulkMoveToTeam/canBulkMoveToPersonal
                           above); this per-card item was missing it. */}
+                      <CompanyProjectMoveMenuItem project={project} onRequest={project=>{companyMove.request(project);setMenuOpenId(null);}}/>
                       {collaborationAvailable && (shared && creator.ownedBySelf ? (
                         <button
                           type="button"
@@ -1846,7 +1849,7 @@ export function RecentProjectsStrip({
                           type="button"
                           role="menuitem"
                           className="danger"
-                          disabled={!creator.ownedBySelf}
+                          disabled={project.companyAccess ? !project.companyAccess.canManage : !creator.ownedBySelf}
                           title={creator.ownedBySelf ? undefined : t('recentProjects.ownOnlyMutation')}
                           onClick={() => requestDelete(project)}
                         >
@@ -1898,6 +1901,7 @@ export function RecentProjectsStrip({
           </DialogFooter>
         </Dialog>
       ) : null}
+      {companyMove.dialog}
       {deleteFlow.target ? (
         <ProjectDeleteConfirmDialog
           projectName={deleteFlow.target.name}

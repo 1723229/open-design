@@ -115,9 +115,9 @@ import { setPendingDesignSystemCreateEntry } from '../analytics/ds-create-entry'
 import { workspaceContextLinkedDirs } from './workspace-context';
 import {
   currentWorkspaceAccountGeneration,
-  useWorkspaceContext,
   workspaceResourceReadContext,
 } from '../collab/useWorkspaceContext';
+import {useResourceWorkspaceContext as useWorkspaceContext} from '../company/CompanyResourceContext';
 import { useWorkspaceInvalidation } from '../collab/workspace-events';
 import { useWorkspaceSnapshotActivation } from '../collab/workspace-snapshot-activation';
 import {

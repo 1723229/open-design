@@ -33,6 +33,7 @@ COPY design-systems ./design-systems
 COPY craft ./craft
 COPY prompt-templates ./prompt-templates
 COPY plugins/_official ./plugins/_official
+COPY plugins/registry ./plugins/registry
 COPY assets/frames ./assets/frames
 COPY assets/community-pets ./assets/community-pets
 COPY data/plugin-previews ./data/plugin-previews

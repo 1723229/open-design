@@ -39,6 +39,7 @@ import type { AgentInfo } from '../types';
 import { isVisibleLocalCliAgent } from '../utils/visibleAgents';
 import { Icon } from './Icon';
 import { useT } from '../i18n';
+import { useCompany } from '../company/CompanyProvider';
 
 type Translate = ReturnType<typeof useT>;
 
@@ -314,7 +315,19 @@ function signature(rows: DraftRow[]): string {
 }
 
 export const McpClientSection = forwardRef<McpClientSectionHandle, Props>(
-  function McpClientSection({ onServersChanged, onDirtyChange, surface = 'integrations', navigationPage }, ref) {
+  function McpClientSection(props, ref) {
+    const company = useCompany();
+    const t = useT();
+    if (company.isMember) return <section className="settings-section">
+      <div className="section-head"><h3>{t('mcpClient.title')}</h3></div>
+      <p className="hint">{t('company.managedSettings')}</p>
+    </section>;
+    return <McpClientConfiguration {...props} ref={ref} />;
+  },
+);
+
+const McpClientConfiguration = forwardRef<McpClientSectionHandle, Props>(
+  function McpClientConfiguration({ onServersChanged, onDirtyChange, surface = 'integrations', navigationPage }, ref) {
   const t = useT();
   const analytics = useAnalytics();
   // Single dispatch point for every click in this section: routes to the

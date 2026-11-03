@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@open-design/components';
 import { useT } from '../i18n';
@@ -24,10 +24,22 @@ export function MoveToTeamConfirmDialog({
   action,
   onCancel,
   onConfirm,
+  description,
+  children,
+  error,
+  pending = false,
+  confirmDisabled = false,
+  allowSkip = true,
 }: {
   action: 'to-team' | 'to-personal';
   onCancel: () => void;
   onConfirm: () => void;
+  description?: ReactNode;
+  children?: ReactNode;
+  error?: string | null;
+  pending?: boolean;
+  confirmDisabled?: boolean;
+  allowSkip?: boolean;
 }) {
   const t = useT();
   const titleId = useId();
@@ -36,7 +48,7 @@ export function MoveToTeamConfirmDialog({
     <Dialog
       className="modal-confirm"
       role="alertdialog"
-      onClose={onCancel}
+      onClose={pending ? () => {} : onCancel}
       closeOnEscape
       ariaLabelledBy={titleId}
     >
@@ -46,7 +58,7 @@ export function MoveToTeamConfirmDialog({
           : t('recentProjects.moveOutOfTeam')}
       </DialogTitle>
       <DialogDescription>
-        {action === 'to-team' ? (
+        {description ?? (action === 'to-team' ? (
           <>
             {t('recentProjects.moveToTeamDescPre')}
             <strong>{t('recentProjects.moveToTeamDescStrong')}</strong>
@@ -58,22 +70,25 @@ export function MoveToTeamConfirmDialog({
             <strong>{t('recentProjects.moveToPersonalDescStrong')}</strong>
             {t('recentProjects.moveToPersonalDescPost')}
           </>
-        )}
+        ))}
       </DialogDescription>
+      {children}
+      {error && <p role="alert">{error}</p>}
       <DialogFooter className="row">
-        <label className="recent-projects__move-remind">
+        {allowSkip && <label className="recent-projects__move-remind">
           <input
             type="checkbox"
             checked={dontRemind}
             onChange={(event) => setDontRemind(event.target.checked)}
           />
           {t('recentProjects.moveDontRemind')}
-        </label>
-        <button type="button" onClick={onCancel}>
+        </label>}
+        <button type="button" disabled={pending} onClick={onCancel}>
           {t('designs.renameCancel')}
         </button>
         <button
           type="button"
+          disabled={pending || confirmDisabled}
           className={`primary${action === 'to-team' ? ' recent-projects__move-confirm' : ''}`}
           onClick={() => {
             if (dontRemind) {
@@ -86,7 +101,7 @@ export function MoveToTeamConfirmDialog({
             onConfirm();
           }}
         >
-          {action === 'to-team'
+          {pending ? t('common.loading') : action === 'to-team'
             ? t('recentProjects.confirmMoveToTeam')
             : t('recentProjects.confirmMoveToPersonal')}
         </button>

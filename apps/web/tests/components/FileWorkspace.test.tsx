@@ -45,6 +45,7 @@ import {
 } from '../../src/collab/collab-context';
 import { IframeKeepAliveProvider } from '../../src/components/IframeKeepAlivePool';
 import { navigate } from '../../src/router';
+import * as companySession from '../../src/company/CompanyProvider';
 
 describe('settleManualEditExit', () => {
   it.each([
@@ -3255,6 +3256,11 @@ describe('FileWorkspace launcher tab creation', () => {
   });
 
   it('opens a share request without dropping existing browser tabs', async () => {
+    vi.spyOn(companySession, 'useCompany').mockReturnValue({
+      enabled: true, isMember: false, user: { id: 'owner', username: 'Owner', role: 'admin', mustChangePassword: false },
+      presentation: { showAgentIdentity: false, hiddenSettingsSections: [] }, logout: async () => {},
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ members: [], users: [], canManage: true })));
     const onTabsStateChange = vi.fn();
     const browserTabs = [
       {
@@ -3288,10 +3294,15 @@ describe('FileWorkspace launcher tab creation', () => {
         browserTabs,
       });
     });
-    expect(await screen.findByRole('heading', { name: 'Share', level: 2 })).toBeVisible();
+    expect(await screen.findByRole('dialog', { name: 'Project sharing' })).toBeVisible();
   });
 
   it('F13: two artifact-card requests at the same clock tick reopen the real Share panel after close', async () => {
+    vi.spyOn(companySession, 'useCompany').mockReturnValue({
+      enabled: true, isMember: false, user: { id: 'owner', username: 'Owner', role: 'admin', mustChangePassword: false },
+      presentation: { showAgentIdentity: false, hiddenSettingsSections: [] }, logout: async () => {},
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ members: [], users: [], canManage: true })));
     const onTabsStateChange = vi.fn();
     let lastNonce = 100;
     function Host() {
@@ -3310,13 +3321,13 @@ describe('FileWorkspace launcher tab creation', () => {
     }
     render(<Host />);
     await waitFor(() => expect(onTabsStateChange).toHaveBeenCalledWith(expect.objectContaining({ active: 'landing.html' })));
-    expect(await screen.findByRole('heading', { name: 'Share', level: 2 })).toBeVisible();
+    expect(await screen.findByRole('dialog', { name: 'Project sharing' })).toBeVisible();
     expect(lastNonce).toBe(100);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Share', level: 2 })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Project sharing' })).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Artifact card Share' }));
     expect(lastNonce).toBe(101);
-    expect(await screen.findByRole('heading', { name: 'Share', level: 2 })).toBeVisible();
+    expect(await screen.findByRole('dialog', { name: 'Project sharing' })).toBeVisible();
     expect(onTabsStateChange).toHaveBeenCalledTimes(2);
     expect(onTabsStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ active: 'landing.html', browserTabs: [expect.objectContaining({ url: 'https://dribbble.com/' })] }));
   });
@@ -3528,7 +3539,7 @@ describe('FileWorkspace launcher tab creation', () => {
 });
 
 describe('DesignFilesPanel plugin folders', () => {
-  it('surfaces generated plugin folders with agent-routed CLI actions', async () => {
+  it('keeps generated skill installation and hides upstream publishing actions', async () => {
     const onPluginFolderAgentAction = vi.fn();
     const container = renderWorkspace(
       <DesignFilesPanel
@@ -3570,16 +3581,9 @@ describe('DesignFilesPanel plugin folders', () => {
     const contribute = container.querySelector<HTMLButtonElement>(
       '[data-testid="design-plugin-folder-contribute-generated-plugin"]',
     );
-    expect(publish).toBeTruthy();
-    expect(contribute).toBeTruthy();
-    await act(async () => {
-      publish?.click();
-    });
-    expect(onPluginFolderAgentAction).toHaveBeenCalledWith('generated-plugin', 'publish');
-    await act(async () => {
-      contribute?.click();
-    });
-    expect(onPluginFolderAgentAction).toHaveBeenCalledWith('generated-plugin', 'contribute');
+    expect(publish).toBeNull();
+    expect(contribute).toBeNull();
+    expect(onPluginFolderAgentAction).toHaveBeenCalledTimes(1);
     expect(container.textContent).not.toContain(
       'Sent to the agent. The CLI run will continue in chat.',
     );

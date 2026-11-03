@@ -32,7 +32,11 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+const company = vi.hoisted(() => ({ enabled: false }));
+vi.mock('../../src/company/CompanyProvider', () => ({ useCompany: () => company }));
+
 beforeEach(() => {
+  company.enabled = false;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
     if (url === '/api/skills') return jsonResponse({ skills: [] });
@@ -62,6 +66,18 @@ async function openCreateDialog() {
 }
 
 describe('ExtensionsMarketplace create dialog layout (#110)', () => {
+  it('uses the original skills catalogue and skill import dialog in company mode', async () => {
+    company.enabled = true;
+    const { container } = await openCreateDialog();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Skills');
+    expect(container.querySelector('.plugin-marketplace__switch')).toBeNull();
+    expect(container.querySelector('.plugin-marketplace__create-tabs')).toBeNull();
+    expect(screen.getByRole('dialog').textContent).toContain('SKILL.md');
+    expect(screen.queryByText('open-design.json / SKILL.md')).toBeNull();
+    expect(screen.getByTestId('plugin-create-import-url')).toBeTruthy();
+    expect(screen.getByTestId('plugin-create-upload-folder')).toBeTruthy();
+  });
+
   it('keeps every card action button inside the card content, never a direct <article> child', async () => {
     const { container } = await openCreateDialog();
 

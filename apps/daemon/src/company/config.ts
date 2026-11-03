@@ -26,6 +26,8 @@ export interface CompanyConfig {
   publicOrigin: string;
   auth: { mode: 'local' | 'ldap'; ldap?: CompanyLdapConfig };
   presentation: CompanyPresentation;
+  teams?: { enabled: boolean };
+  integrations?: Array<{ id: string; authorizeUrl: string; secret: string }>;
 }
 
 function object(value: unknown): Record<string, unknown> {
@@ -85,6 +87,23 @@ export function loadCompanyConfig(dataRoot: string, env: Record<string, string |
     enabled: true, publicOrigin: origin.origin, auth: { mode },
     presentation: { showAgentIdentity: presentation.show_agent_identity === true, hiddenSettingsSections: hidden as string[] },
   };
+  const teams = object(input.teams);
+  result.teams = { enabled: teams.enabled === true };
+  if (teams.enabled !== undefined && typeof teams.enabled !== 'boolean') throw new Error('Invalid teams.enabled');
+  const integrations = object(input.integrations);
+  if (integrations.enabled === true) {
+    if (!result.teams.enabled || mode !== 'ldap' || !Array.isArray(integrations.clients)) throw new Error('Integrations require teams and LDAP');
+    const ids = new Set<string>();
+    result.integrations = integrations.clients.map((value: unknown) => {
+      const client = object(value), id = required(client.id, 'integration client id');
+      const authorizeUrl = new URL(required(client.authorize_url, 'integration authorize_url'));
+      const secret = required(client.secret, 'integration secret');
+      if (!/^[a-z][a-z0-9-]{0,63}$/u.test(id) || ids.has(id) || secret.length < 32 || secret.length > 4096
+        || !['http:', 'https:'].includes(authorizeUrl.protocol) || authorizeUrl.username || authorizeUrl.password || authorizeUrl.search || authorizeUrl.hash) throw new Error('Invalid integration client');
+      ids.add(id);
+      return {id, authorizeUrl: authorizeUrl.href, secret};
+    });
+  }
   if (mode === 'ldap') {
     const ldap = object(object(authentication.providers).ldap);
     if (ldap.bind_mode !== undefined && ldap.bind_mode !== 'service') throw new Error('Company LDAP requires service bind mode');

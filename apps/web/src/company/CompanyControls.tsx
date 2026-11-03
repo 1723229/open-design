@@ -6,14 +6,20 @@ import { buildPath, useRoute } from '../router';
 import { copyToClipboard } from '../lib/copy-to-clipboard';
 import { companyRequest, useCompany } from './CompanyProvider';
 import { COMPANY_MEMBERS_CHANGED_EVENT } from './useCompanyProjectReadOnly';
+import { SharePanelHeader } from '../components/share/SharePanelHeader';
+import { SharePublishedLinkControls } from '../components/share/ShareTab';
+import { ShareNoticeRow } from '../components/share/ShareNoticeRow';
+import { ShareErrorRow } from '../components/share/ShareErrorRow';
+import { ShareButton } from '../components/share/ShareButton';
 import styles from './company.module.css';
+import {CompanyTasksDialog} from './CompanyTasksDialog';
 
 export function CompanyAccountMenu() {
   const company = useCompany();
   const t = useT();
   const route = useRoute();
   const [open, setOpen] = useState(false);
-  const [dialog, setDialog] = useState<'users' | 'sharing' | null>(null);
+  const [dialog, setDialog] = useState<'users' | 'sharing' | 'tasks' | null>(null);
   const [error, setError] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -29,12 +35,14 @@ export function CompanyAccountMenu() {
   return <div className={styles.account} ref={ref}>
     <Button ref={trigger} variant="ghost" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>{company.user.username}</Button>
     {open && <div className={styles.menu} role="menu" aria-label={company.user.username}>
+      <Button variant="ghost" role="menuitem" onClick={()=>{setDialog('tasks');setOpen(false);}}>{t('company.tasks')}</Button>
       {company.user.role === 'admin' && <Button variant="ghost" role="menuitem" onClick={() => { setDialog('users'); setOpen(false); }}>{t('company.users')}</Button>}
       {route.kind === 'project' && <Button variant="ghost" role="menuitem" onClick={() => { setDialog('sharing'); setOpen(false); }}>{t('company.sharing')}</Button>}
       <Button variant="ghost" role="menuitem" onClick={() => { setError(false); void company.logout().catch(() => setError(true)); }}>{t('company.logout')}</Button>
       {error && <p role="alert">{t('company.saveError')}</p>}
     </div>}
     {dialog === 'users' && <CompanyUsersDialog currentUserId={company.user.id} allowCreate={company.authMode === 'local'} onClose={() => setDialog(null)} />}
+    {dialog === 'tasks' && <CompanyTasksDialog onClose={()=>setDialog(null)}/>}
     {dialog === 'sharing' && route.kind === 'project' && <CompanySharingDialog key={route.projectId} projectId={route.projectId} onClose={() => setDialog(null)} />}
   </div>;
 }
@@ -106,62 +114,82 @@ export function CompanySharingDialog({ projectId, fileName, onClose }: { project
   const currentRoute = route.kind === 'project' && route.projectId === projectId ? route : null;
   const shareUrl = `${typeof window === 'undefined' ? '' : window.location.origin}${buildPath({ kind: 'project', projectId, fileName: fileName ?? currentRoute?.fileName ?? null, conversationId: currentRoute?.conversationId })}`;
   const [copyState, setCopyState] = useState<'copied' | 'failed' | null>(null);
+  const copying = useRef(false);
+  const [copyBusy, setCopyBusy] = useState(false);
   const [membership, setMembership] = useState<CompanyProjectMembersResponse | null>(null);
   const [users, setUsers] = useState<CompanyUsersResponse['users']>([]);
   const [userId, setUserId] = useState('');
   const [role, setRole] = useState<'viewer' | 'editor'>('viewer');
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<'load' | 'save' | null>(null);
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const path = `/api/company/projects/${encodeURIComponent(projectId)}/members`;
+  const canManage = membership?.canManage && !membership.team;
   useEffect(() => {
     let active = true;
-    setError(false);
+    setError(null);
+    setMembership(null);
+    setUsers([]);
+    setUserId('');
+    setCopyState(null);
     void (async () => {
       const value = await companyRequest<CompanyProjectMembersResponse>(path);
       if (!active) return;
       setMembership(value);
-      if (value.canManage) {
+      if (value.canManage && !value.team) {
         const directory = await companyRequest<CompanyUsersResponse>('/api/company/users');
         if (active) setUsers(directory.users);
       }
-    })().catch(() => { if (active) setError(true); });
+    })().catch(() => { if (active) setError('load'); });
     return () => { active = false; };
   }, [path, attempt]);
   async function mutate(memberId: string, memberRole?: 'viewer' | 'editor') {
-    setBusy(true); setError(false);
+    if (!canManage || busy) return;
+    setBusy(true); setError(null);
     try {
       await companyRequest(memberRole ? path : `${path}/${encodeURIComponent(memberId)}`, { method: memberRole ? 'PUT' : 'DELETE', headers: { 'Content-Type': 'application/json' }, ...(memberRole ? { body: JSON.stringify({ userId: memberId, role: memberRole }) } : {}) });
       setMembership(await companyRequest<CompanyProjectMembersResponse>(path));
       window.dispatchEvent(new Event(COMPANY_MEMBERS_CHANGED_EVENT));
       setUserId('');
-    } catch { setError(true); }
+    } catch { setError('save'); }
     finally { setBusy(false); }
   }
-  return <CompanyDialog title={t('company.sharing')} onClose={onClose}>
-    {error && <p role="alert">{t('company.loadError')} <Button onClick={() => setAttempt(value => value + 1)}>{t('company.retry')}</Button></p>}
-    {!membership && !error && <p role="status">{t('common.loading')}</p>}
-    {membership && <div className={styles.sharingLink}>
-      <p>{t('company.shareLinkHint')}</p>
-      <input aria-label={t('company.sharing')} readOnly value={shareUrl} onFocus={event => event.currentTarget.select()} />
-      <Button onClick={() => { void copyToClipboard(shareUrl).then(ok => setCopyState(ok ? 'copied' : 'failed')); }}>{t('fileViewer.copyShareLink')}</Button>
-      {copyState && <p role="status">{t(copyState === 'copied' ? 'preview.shareCopied' : 'fileViewer.copyLinkManually')}</p>}
+  async function copyLink() {
+    if (copying.current) return;
+    copying.current = true;
+    setCopyBusy(true);
+    try { setCopyState(await copyToClipboard(shareUrl) ? 'copied' : 'failed'); }
+    finally { copying.current = false; setCopyBusy(false); }
+  }
+  return <Dialog className={`chrome-unified-popover chrome-unified-popover--share ${styles.shareDialog}`} ariaLabel={t('company.sharing')} onClose={onClose} closeOnEscape closeOnBackdrop>
+    <SharePanelHeader title={t('company.sharing')} closeLabel={t('common.close')} onClose={onClose} />
+    {error && <div className={styles.shareError}>
+      <ShareErrorRow message={t(error === 'load' ? 'company.loadError' : 'company.saveError')} role="alert" />
+      {error === 'load' && <ShareButton variant="soft" onClick={() => setAttempt(value => value + 1)}>{t('company.retry')}</ShareButton>}
     </div>}
-    <div className={styles.rows}>{membership?.members.map(member => <div className={styles.row} key={member.userId}>
+    {!membership && !error && <p role="status">{t('common.loading')}</p>}
+    {membership && <>
+      <ShareNoticeRow message={t('company.shareLinkHint')} />
+      <SharePublishedLinkControls url={shareUrl} copying={copyBusy} feedback={copyState} onCopy={() => { void copyLink(); }} t={t} />
+      <section className={styles.shareMembers} aria-label={t('company.member')}>
+      {membership.team && <p className={styles.shareTeam}>{t('company.inheritedTeam')} <a href={buildPath({kind:'home',view:'projects',companyTeamId:membership.team.id})}>{membership.team.name}</a></p>}
+      {membership.members.map(member => <div className={styles.shareMember} key={member.userId}>
       <span>{member.username}</span>
-      {membership.canManage && member.role !== 'owner' ? <>
+      {canManage && member.role !== 'owner' ? <>
         <select aria-label={`${member.username} ${t('company.role')}`} value={member.role} disabled={busy} onChange={event => { void mutate(member.userId, event.target.value as 'viewer' | 'editor'); }}>
           <option value="viewer">{t('company.viewer')}</option><option value="editor">{t('company.editor')}</option>
         </select>
         <Button variant="ghost" disabled={busy} onClick={() => { void mutate(member.userId); }}>{t('company.removeMember')}</Button>
       </> : <span>{t(member.role === 'owner' ? 'company.owner' : member.role === 'editor' ? 'company.editor' : 'company.viewer')}</span>}
-    </div>)}</div>
-    {membership?.canManage && <form className={styles.sharing} onSubmit={event => { event.preventDefault(); if (userId) void mutate(userId, role); }}>
-      <label>{t('company.member')}<select value={userId} required onChange={event => setUserId(event.target.value)}><option value="">{t('company.selectUser')}</option>{users.filter(user => !user.disabled && !membership.members.some(member => member.userId === user.id)).map(user => <option key={user.id} value={user.id}>{user.username}</option>)}</select></label>
-      <label>{t('company.role')}<select value={role} onChange={event => setRole(event.target.value as 'viewer' | 'editor')}><option value="viewer">{t('company.viewer')}</option><option value="editor">{t('company.editor')}</option></select></label>
-      <Button type="submit" disabled={busy || !userId}>{t('company.addMember')}</Button>
-    </form>}
-  </CompanyDialog>;
+      </div>)}
+      </section>
+      {canManage && <form className={styles.shareInvite} onSubmit={event => { event.preventDefault(); if (userId) void mutate(userId, role); }}>
+        <label>{t('company.member')}<select value={userId} required disabled={busy} onChange={event => setUserId(event.target.value)}><option value="">{t('company.selectUser')}</option>{users.filter(user => !user.disabled && !membership.members.some(member => member.userId === user.id)).map(user => <option key={user.id} value={user.id}>{user.username}</option>)}</select></label>
+        <label>{t('company.role')}<select value={role} disabled={busy} onChange={event => setRole(event.target.value as 'viewer' | 'editor')}><option value="viewer">{t('company.viewer')}</option><option value="editor">{t('company.editor')}</option></select></label>
+        <ShareButton variant="primary" hoverLighten={false} type="submit" disabled={busy || !userId} aria-busy={busy}>{t('company.addMember')}</ShareButton>
+      </form>}
+    </>}
+  </Dialog>;
 }
 
 export function CompanyMemberSettings({ presentation = 'modal', onClose }: { presentation?: 'page' | 'modal'; onClose: () => void }) {

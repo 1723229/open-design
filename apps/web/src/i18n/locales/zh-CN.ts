@@ -1,6 +1,24 @@
 import type { Dict } from "../types";
 
 export const zhCN: Dict = {
+  "company.tasks": "任务",
+  "company.taskUserUsage": "正在运行 {running}/{limit} · 排队 {queued} 项",
+  "company.taskGlobalUsage": "平台运行中 {running}/{limit}",
+  "company.taskProjectLimit": "同一设计同时执行一个任务，后续消息按顺序排队。",
+  "company.noActiveTasks": "暂无运行或排队的任务。",
+  "company.teams": "团队",
+  "company.personalSpace": "个人空间",
+  "company.moveToTeamDescription": "转入后，团队成员可按角色查看、评论和编辑此设计，原个人共享授权将被移除。",
+  "company.moveToPersonalDescription": "移出后，设计回到原所有者的个人空间，团队成员将失去访问权限。",
+  "company.teamMembers": "团队成员",
+  "company.createTeam": "创建团队",
+  "company.teamName": "团队名称",
+  "company.archiveTeam": "归档团队",
+  "company.restoreTeam": "恢复团队",
+  "company.inheritedTeam": "访问权限继承自团队。",
+  "company.manageAtSource": "前往来源平台管理",
+  "company.teamUnavailable": "团队不可用或权限已失效。",
+  "company.teamReadOnly": "当前团队为只读，支持查看和导出。",
 
   "company.models.effective": "当前生效配置",
   "company.models.inUse": "使用中",

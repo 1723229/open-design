@@ -1,6 +1,24 @@
 import type { Dict } from '../types';
 
 export const fa: Dict = {
+  "company.tasks": "Tasks",
+  "company.taskUserUsage": "{running}/{limit} running · {queued} queued",
+  "company.taskGlobalUsage": "{running}/{limit} running across the platform",
+  "company.taskProjectLimit": "One task runs per project. Further messages wait in order.",
+  "company.noActiveTasks": "No running or queued tasks.",
+  "company.teams": "Teams",
+  "company.personalSpace": "فضای شخصی",
+  "company.moveToTeamDescription": "Team members can view, comment and edit according to their roles. Existing personal sharing permissions will be removed.",
+  "company.moveToPersonalDescription": "The design returns to its original owner’s personal space. Team members will lose access.",
+  "company.teamMembers": "Team members",
+  "company.createTeam": "Create team",
+  "company.teamName": "Team name",
+  "company.archiveTeam": "Archive team",
+  "company.restoreTeam": "Restore team",
+  "company.inheritedTeam": "Access is inherited from the team.",
+  "company.manageAtSource": "Manage in source platform",
+  "company.teamUnavailable": "Team unavailable or permissions expired.",
+  "company.teamReadOnly": "This team is read-only.",
 
   "company.models.effective": "پیکربندی مؤثر",
   "company.models.inUse": "In use",

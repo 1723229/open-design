@@ -6,7 +6,7 @@ import { reportProjectFailure } from '../../observability/experience-diagnostics
 // `ProjectHoverPreview.tsx`, shared with the chat project switcher so both
 // surfaces show one and the same card for a project (OPEND-2694).
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { ProjectDisplayStatus, WorkspaceCollabContext } from '@open-design/contracts';
@@ -151,6 +151,7 @@ export function RailRecentRow({
   onDuplicate,
   onMoveToTeam,
   onDelete,
+  extraMenuItems,
 }: {
   project: Project;
   workspaceContext?: WorkspaceCollabContext | null;
@@ -182,6 +183,7 @@ export function RailRecentRow({
    *  own — the confirmation is the shared project delete dialog, the same one
    *  the project cards open. */
   onDelete?: (project: Project) => void;
+  extraMenuItems?: ReactNode;
 }) {
   const t = useT();
   useEffect(() => {
@@ -413,7 +415,7 @@ export function RailRecentRow({
             <button
               type="button"
               role="menuitem"
-              disabled={!ownedBySelf}
+              disabled={project.companyAccess ? !project.companyAccess.canWrite : !ownedBySelf}
               title={foreignTitle}
               onClick={() => {
                 releasePopup(project.id, 'menu');
@@ -429,7 +431,7 @@ export function RailRecentRow({
             <button
               type="button"
               role="menuitem"
-              disabled={!ownedBySelf}
+              disabled={project.companyAccess ? !project.companyAccess.canWrite : !ownedBySelf}
               title={foreignTitle}
               onClick={() => {
                 releasePopup(project.id, 'menu');
@@ -445,6 +447,7 @@ export function RailRecentRow({
               the workspace cannot have (OPEND-2794: 无可用团队空间时按产品规则
               隐藏). A shared row and a foreign row keep the item and explain
               themselves instead. */}
+          {extraMenuItems}
           {moveToTeamAvailable && onMoveToTeam ? (
             <button
               type="button"
@@ -483,7 +486,7 @@ export function RailRecentRow({
               type="button"
               role="menuitem"
               className="is-danger"
-              disabled={!ownedBySelf}
+              disabled={project.companyAccess ? !project.companyAccess.canManage : !ownedBySelf}
               title={foreignTitle}
               onClick={() => {
                 releasePopup(project.id, 'menu');

@@ -4,6 +4,7 @@ import { Button } from '@open-design/components';
 import type { HomeHeroChip } from './chips';
 import { HOME_TYPE_ROW_IDS, HOME_TYPE_ROW_MORE_IDS } from './chips';
 import { Icon } from '../Icon';
+import { useCompany } from '../../company/CompanyProvider';
 import { useT } from '../../i18n';
 import { smoothScrollTo } from '../../utils/smoothScrollToTop';
 import styles from './TypePillRow.module.css';
@@ -23,6 +24,7 @@ interface Props {
 
 export function TypePillRow({ chips, activeChipId, disabled, labelFor, onPick }: Props) {
   const t = useT();
+  const company = useCompany();
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -35,7 +37,7 @@ export function TypePillRow({ chips, activeChipId, disabled, labelFor, onPick }:
     .map((id) => chips.find((chip) => chip.id === id))
     .filter((chip): chip is HomeHeroChip => Boolean(chip));
   const inlineChips = byId(HOME_TYPE_ROW_IDS);
-  const moreChips = byId(HOME_TYPE_ROW_MORE_IDS);
+  const moreChips = byId(company.enabled ? ['document', 'web-clone'] : HOME_TYPE_ROW_MORE_IDS);
 
   useLayoutEffect(() => {
     if (!moreOpen) return;

@@ -7,6 +7,7 @@ import type { WorkspaceCollabContext } from '@open-design/contracts';
  * catalog modules can use it without creating an import cycle.
  */
 export function workspaceProjectHeaders(context: WorkspaceCollabContext): HeadersInit {
+  if(context.identitySource==='company') return {'x-nexus-resource-workspace-id':context.workspaceId,'x-nexus-resource-member-id':context.workspaceMemberId};
   return {
     'x-od-workspace-id': context.workspaceId,
     'x-od-workspace-type': context.workspaceType,
@@ -30,6 +31,7 @@ export function workspaceResourceUrl(
 ): string {
   if (!context) return path;
   const separator = path.includes('?') ? '&' : '?';
+  if(context.identitySource==='company') return `${path}${separator}companyWorkspaceId=${encodeURIComponent(context.workspaceId)}&companyMemberId=${encodeURIComponent(context.workspaceMemberId)}`;
   return `${path}${separator}workspaceId=${encodeURIComponent(context.workspaceId)}`
     + `&workspaceMemberId=${encodeURIComponent(context.workspaceMemberId)}`;
 }
@@ -64,6 +66,7 @@ export function workspaceIdentityCacheKey(
 ): string {
   if (!context) return 'none';
   return [
+    ...(context.identitySource?[context.identitySource]:[]),
     context.workspaceId,
     context.workspaceType,
     context.workspaceMemberId,

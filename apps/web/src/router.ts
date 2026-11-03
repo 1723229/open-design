@@ -47,9 +47,10 @@ export type Route =
        * select a specific brand without leaving the tab.
        */
       brandId?: string;
+      companyTeamId?: string;
     }
-  | { kind: 'design-system-create' }
-  | { kind: 'design-system-detail'; designSystemId: string }
+  | { kind: 'design-system-create'; companyTeamId?: string }
+  | { kind: 'design-system-detail'; designSystemId: string; companyTeamId?: string }
   | {
       kind: 'project';
       projectId: string;
@@ -63,8 +64,8 @@ export type Route =
       conversationId?: string | null;
       fileName: string | null;
     }
-  | { kind: 'marketplace' }
-  | { kind: 'marketplace-detail'; pluginId: string }
+  | { kind: 'marketplace'; companyTeamId?: string }
+  | { kind: 'marketplace-detail'; pluginId: string; companyTeamId?: string }
   // Team collaboration demo surface. Drives the live presence + sync loop
   // against the real daemon routes with a clearly-stubbed demo identity (real
   // B identity / D visibility integration pending). Deep-linkable so a second
@@ -76,6 +77,11 @@ export type Route =
 export function parseRoute(pathname: string): Route {
   const parts = pathname.replace(/\/+$/, '').split('/').filter(Boolean);
   if (parts.length === 0) return { kind: 'home', view: 'home' };
+  if (parts[0] === 'teams' && parts[1]) {
+    const inner = parts.length === 2 ? {kind:'home',view:'projects'} as const : parseRoute(`/${parts.slice(2).join('/')}`);
+    if (inner.kind === 'home') return {...inner,view:inner.view === 'drafts' || inner.view === 'all-projects' ? 'projects' : inner.view,companyTeamId:decodeURIComponent(parts[1])};
+    if(['design-system-create','design-system-detail','marketplace','marketplace-detail'].includes(inner.kind)) return {...inner,companyTeamId:decodeURIComponent(parts[1])} as Route;
+  }
   if (parts[0] === 'onboarding') {
     return { kind: 'home', view: 'onboarding' };
   }
@@ -176,7 +182,12 @@ export function parseRoute(pathname: string): Route {
 }
 
 export function buildPath(route: Route): string {
+  if(route.kind!=='home' && 'companyTeamId' in route && route.companyTeamId) return `/teams/${encodeURIComponent(route.companyTeamId)}${buildPath({...route,companyTeamId:undefined})}`;
   if (route.kind === 'home') {
+    if (route.companyTeamId) {
+      const path = buildPath({...route,companyTeamId:undefined});
+      return `/teams/${encodeURIComponent(route.companyTeamId)}${route.view === 'projects' ? '' : path === '/' ? '/home' : path}`;
+    }
     if (route.view === 'onboarding') return '/onboarding';
     if (route.view === 'projects') return '/projects';
     if (route.view === 'tasks') return '/automations';
@@ -464,6 +475,10 @@ function commitNavigation(route: Route, opts: NavigationOptions = {}): void {
 
 export function navigate(route: Route, opts: NavigationOptions = {}): void {
   const source = getRouteSnapshot();
+  if(['design-system-create','design-system-detail','marketplace','marketplace-detail'].includes(route.kind)
+    && 'companyTeamId' in source && source.companyTeamId && !('companyTeamId' in route && route.companyTeamId)) {
+    route={...route,companyTeamId:source.companyTeamId} as Route;
+  }
   const id = observeNavigation(() => route.kind !== 'project' && navigationPage(source) !== navigationPage(route)
     ? navigationTiming.beginPage(source, route) : null);
   const options: NavigationOptions = { ...opts,

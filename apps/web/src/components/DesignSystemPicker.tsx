@@ -19,6 +19,7 @@ import {
   localizeDesignSystemSummary,
 } from '../i18n/content';
 import { navigate } from '../router';
+import {useResourceWorkspaceContext} from '../company/CompanyResourceContext';
 import { setPendingDesignSystemCreateEntry } from '../analytics/ds-create-entry';
 import { useBrandsByDesignSystemId } from '../runtime/brands';
 import { DesignSystemKitPreview } from './DesignSystemKitPreview';
@@ -81,8 +82,10 @@ export function DesignSystemPicker({
   variant = 'project',
   label,
   showCreateAction = true,
-  workspaceContext,
+  workspaceContext: suppliedWorkspaceContext,
 }: Props) {
+  const resourceState=useResourceWorkspaceContext();
+  const workspaceContext=resourceState.context?.identitySource==='company'?resourceState.context:suppliedWorkspaceContext;
   const { locale, t } = useI18n();
   const triggerDisabled = Boolean(loading || disabled);
   const [open, setOpen] = useState(false);
@@ -281,7 +284,7 @@ export function DesignSystemPicker({
   const createDesignSystem = () => {
     setOpen(false);
     setPendingDesignSystemCreateEntry('composer_picker');
-    navigate({ kind: 'design-system-create' });
+    navigate({ kind: 'design-system-create',...(workspaceContext?.identitySource==='company' && workspaceContext.workspaceType==='team'?{companyTeamId:workspaceContext.workspaceId}:{}) });
   };
 
   const openSystemPreview = (system: DesignSystemSummary) => {

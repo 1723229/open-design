@@ -7,6 +7,7 @@ import {
   type PluginInstallErrorCode,
 } from '../plugins/installer.js';
 import type { RegistryRoots } from '../plugins/registry.js';
+import type { LocalCatalogScope } from '@open-design/contracts';
 
 export interface PluginInstallResult {
   ok: boolean;
@@ -23,6 +24,8 @@ export interface PluginInstallationHelpersDeps {
   PLUGIN_REGISTRY_ROOTS: RegistryRoots;
   PLUGIN_LOCKFILE_PATH: string;
   PLUGIN_UPLOAD_MAX_BYTES: number;
+  allowReplacePlugin?: (scope: LocalCatalogScope, pluginId: string) => boolean | string;
+  claimPlugin?: (scope: LocalCatalogScope, pluginId: string) => void;
 }
 
 interface PluginDbLike {
@@ -44,6 +47,7 @@ interface InstallFromLocalFolderArgs {
   _stagedFolder: string;
   _stagedSourceKind: string;
   lockfilePath: string;
+  allowReplacePlugin?: (pluginId: string) => boolean | string;
 }
 
 interface InstallFromLocalFolderEvent {
@@ -151,7 +155,7 @@ export function createPluginInstallationHelpers(deps: PluginInstallationHelpersD
     };
   }
 
-  async function finishUploadedPluginInstall(stagedFolder: string, source: string): Promise<PluginInstallResult> {
+  async function finishUploadedPluginInstall(stagedFolder: string, source: string, scope?: LocalCatalogScope | null): Promise<PluginInstallResult> {
     const warnings: unknown[] = [];
     const log: string[] = [];
     let plugin = null;
@@ -165,12 +169,14 @@ export function createPluginInstallationHelpers(deps: PluginInstallationHelpersD
         _stagedFolder: pluginRoot,
         _stagedSourceKind: 'user',
         lockfilePath: deps.PLUGIN_LOCKFILE_PATH,
+        ...(scope && deps.allowReplacePlugin ? {allowReplacePlugin: (id: string) => deps.allowReplacePlugin!(scope,id)} : {}),
       })) {
         if (ev.message) log.push(ev.message);
         if (Array.isArray(ev.warnings)) warnings.splice(0, warnings.length, ...ev.warnings);
         if (ev.kind === 'success') {
           if (!ev.plugin) continue;
           plugin = ev.plugin;
+          if(scope && typeof plugin.id==='string') deps.claimPlugin?.(scope,plugin.id);
           message = `Installed ${ev.plugin.title ?? 'plugin'}.`;
           break;
         }
@@ -196,18 +202,18 @@ export function createPluginInstallationHelpers(deps: PluginInstallationHelpersD
     }
   }
 
-  async function stageUploadedPluginZip(buffer: Buffer, source: string) {
+  async function stageUploadedPluginZip(buffer: Buffer, source: string, scope?: LocalCatalogScope | null) {
     const stagedFolder = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'od-plugin-zip-'));
     try {
       await extractPluginZipToFolder(buffer, stagedFolder, deps.PLUGIN_UPLOAD_MAX_BYTES);
-      return await finishUploadedPluginInstall(stagedFolder, source);
+      return await finishUploadedPluginInstall(stagedFolder, source, scope);
     } catch (cause) {
       await fs.promises.rm(stagedFolder, { recursive: true, force: true }).catch(() => undefined);
       return failedInstallResult(cause);
     }
   }
 
-  async function stageUploadedPluginFolder(files: Array<{ buffer: Buffer; originalname: string }>, rawPaths: unknown) {
+  async function stageUploadedPluginFolder(files: Array<{ buffer: Buffer; originalname: string }>, rawPaths: unknown, scope?: LocalCatalogScope | null) {
     const stagedFolder = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'od-plugin-folder-'));
     try {
       if (files.length === 0) throw new Error('files are required');
@@ -222,7 +228,7 @@ export function createPluginInstallationHelpers(deps: PluginInstallationHelpersD
         await fs.promises.mkdir(path.dirname(dest), { recursive: true });
         await fs.promises.writeFile(dest, file.buffer);
       }
-      return await finishUploadedPluginInstall(stagedFolder, 'upload:folder');
+      return await finishUploadedPluginInstall(stagedFolder, 'upload:folder', scope);
     } catch (cause) {
       await fs.promises.rm(stagedFolder, { recursive: true, force: true }).catch(() => undefined);
       return failedInstallResult(cause);

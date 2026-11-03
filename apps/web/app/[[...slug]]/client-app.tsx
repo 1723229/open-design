@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { CompanyProvider, COMPANY_SESSION_CHANGED_EVENT } from '../../src/company/CompanyProvider';
+import {CompanyResourceProvider} from '../../src/company/CompanyResourceContext';
 
 import { installErrorHandlers } from '../../src/analytics/error-tracking';
 import { MatrixLoader } from '../../src/components/MatrixLoader';
@@ -63,5 +64,5 @@ const App = dynamic(() => import('../../src/App').then((m) => m.App), {
 });
 
 export function ClientApp() {
-  return <CompanyProvider><App /></CompanyProvider>;
+  return <CompanyProvider><CompanyResourceProvider><App /></CompanyResourceProvider></CompanyProvider>;
 }

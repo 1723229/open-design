@@ -16,7 +16,11 @@ import {
   orderedCreateChips,
 } from '../../../src/components/home-hero/chips';
 
+const company = vi.hoisted(() => ({ enabled: false }));
+vi.mock('../../../src/company/CompanyProvider', () => ({ useCompany: () => company }));
+
 afterEach(() => {
+  company.enabled = false;
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -47,6 +51,16 @@ function renderRow() {
 }
 
 describe('TypePillRow — 更多 (OPEND-3146)', () => {
+  it('keeps only document and website clone in company More and preserves selection', () => {
+    company.enabled = true;
+    const { onPick } = renderRow();
+    fireEvent.click(screen.getByTestId('home-hero-type-pills-more'));
+    expect(screen.getAllByRole('option').map(item => item.getAttribute('data-chip'))).toEqual(['document', 'web-clone']);
+    fireEvent.click(screen.getByTestId('home-hero-type-pill-document-more'));
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 'document' }));
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
   it('keeps the three lead types inline and lists the other types behind 更多 in product order', () => {
     expect([...HOME_TYPE_ROW_IDS]).toEqual(['prototype', 'motion-design', 'deck']);
     expect([...HOME_TYPE_ROW_MORE_IDS]).toEqual(EXPECTED_MORE_ORDER);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ProjectFileVersion } from '@open-design/contracts';
 
 import {
@@ -25,6 +25,21 @@ function version(overrides: Partial<ProjectFileVersion> = {}): ProjectFileVersio
 }
 
 describe('artifact export version origin', () => {
+  it('keeps editing and exports available without claiming verified origin on HTTP', async () => {
+    const content = '<html>HTTP deployment</html>';
+    const current = version({contentDigest: await artifactVersionContentDigest(content)});
+    vi.stubGlobal('crypto', {});
+    try {
+      await expect(matchingArtifactVersionId(content, current)).resolves.toBeUndefined();
+      await expect(artifactExportOriginProps(content, current)).resolves.toEqual({
+        entry_surface: 'open_design_ui',
+        origin_entry_surface: 'unknown',
+        artifact_origin_status: 'unknown',
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it('emits matched Plugin origin only when the exact UTF-8 digest agrees', async () => {
     const content = '<html><body>你好 OpenDesign</body></html>';
     const contentDigest = await artifactVersionContentDigest(content);

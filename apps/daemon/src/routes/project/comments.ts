@@ -32,6 +32,8 @@ export type ProjectCommentWorkspaceContextResolution =
     };
 
 export interface RegisterProjectCommentRoutesDeps extends RouteDeps<'db' | 'projectStore' | 'conversations'> {
+  /** Authenticated local deployment identity, independent of cloud membership. */
+  resolveLocalCommentIdentity?: (req: Request, projectId: string) => {memberId:string;displayName:string;canManage:boolean} | null;
   /** Optional in focused CRUD fixtures; production supplies request-scoped analytics. */
   telemetry?: RouteDeps<'telemetry'>['telemetry'];
   /**
@@ -404,7 +406,10 @@ export function registerProjectCommentRoutes(app: Express, ctx: RegisterProjectC
   async function resolveCaller(
     req: Request,
     context: WorkspaceCollabContext | null,
+    projectId: string,
   ): Promise<string | undefined> {
+    const local=ctx.resolveLocalCommentIdentity?.(req,projectId);
+    if (local) return local.memberId;
     if (ctx.resolveWorkspaceContext) {
       return context?.workspaceMemberId || undefined;
     }
@@ -458,6 +463,8 @@ export function registerProjectCommentRoutes(app: Express, ctx: RegisterProjectC
     context: WorkspaceCollabContext | null,
   ): Promise<boolean> {
     const author = comment.authorMemberId;
+    const local=ctx.resolveLocalCommentIdentity?.(req,projectId);
+    if (local) return author === local.memberId || local.canManage;
     if (!author) {
       if (!ctx.isSharedProject) return true;
       let shared: boolean;
@@ -470,7 +477,7 @@ export function registerProjectCommentRoutes(app: Express, ctx: RegisterProjectC
     }
     let me: string | undefined;
     try {
-      me = await resolveCaller(req, context);
+      me = await resolveCaller(req, context, projectId);
     } catch {
       return false;
     }
@@ -489,7 +496,9 @@ export function registerProjectCommentRoutes(app: Express, ctx: RegisterProjectC
 
   // Read state is project-scoped by the frozen DTO. The workspace identity is
   // resolved by the existing request authority and is never taken from authorKey.
-  const viewerScopeFor = (context: WorkspaceCollabContext | null): string => {
+  const viewerScopeFor = (req: Request, context: WorkspaceCollabContext | null): string => {
+    const local=ctx.resolveLocalCommentIdentity?.(req,String(req.params.id));
+    if (local) return `company:${local.memberId}`;
     const workspaceId = context?.workspaceId?.trim();
     const memberId = context?.workspaceMemberId?.trim();
     return workspaceId && memberId ? `${workspaceId}:${memberId}` : 'local';
@@ -500,8 +509,8 @@ export function registerProjectCommentRoutes(app: Express, ctx: RegisterProjectC
     const resolution = await resolveReadRequestWorkspaceContext(req, req.params.id);
     if (!resolution.ok) return sendWorkspaceResolutionError(res, resolution);
     const filePath = typeof req.query.filePath === 'string' ? req.query.filePath : null;
-    if (filePath) return res.json(getFileCommentReadState(db, req.params.id, viewerScopeFor(resolution.context), filePath));
-    return res.json(getProjectCommentReadState(db, req.params.id, viewerScopeFor(resolution.context)));
+    if (filePath) return res.json(getFileCommentReadState(db, req.params.id, viewerScopeFor(req,resolution.context), filePath));
+    return res.json(getProjectCommentReadState(db, req.params.id, viewerScopeFor(req,resolution.context)));
   });
 
   app.put('/api/projects/:id/comments/read', async (req, res) => {
@@ -514,14 +523,14 @@ export function registerProjectCommentRoutes(app: Express, ctx: RegisterProjectC
         || body.commentIds.length > 500 || body.commentIds.some(id => typeof id !== 'string' || !id || id.length > 256)) {
         return res.status(400).json({ error: 'filePath and up to 500 commentIds are required' });
       }
-      return res.json(markFileCommentsSeen(db, req.params.id, viewerScopeFor(resolution.context), body.filePath, body.commentIds));
+      return res.json(markFileCommentsSeen(db, req.params.id, viewerScopeFor(req,resolution.context), body.filePath, body.commentIds));
     }
     if (!Number.isFinite(body?.readAt)) {
       return res.status(400).json({ error: 'readAt must be a finite number' });
     }
     // A future client clock must not hide comments that have not arrived yet.
     const readAt = Math.min(body!.readAt!, Date.now());
-    return res.json(markProjectCommentsRead(db, req.params.id, viewerScopeFor(resolution.context), readAt));
+    return res.json(markProjectCommentsRead(db, req.params.id, viewerScopeFor(req,resolution.context), readAt));
   });
 
   // ---- Preview comments ----------------------------------------------------
@@ -621,7 +630,7 @@ export function registerProjectCommentRoutes(app: Express, ctx: RegisterProjectC
       if (jsonBodyByteLength(req) > SHARE_COMMENT_MAX_BYTES) {
         return sendCommentPayloadTooLarge(res);
       }
-      const authorMemberId = await resolveCaller(req, workspaceContext);
+      const authorMemberId = await resolveCaller(req, workspaceContext, req.params.id);
       const requestedId = typeof body.id === 'string' && body.id.trim() ? body.id.trim() : '';
       let existing: PreviewComment | null = null;
       if (requestedId) {
@@ -638,6 +647,9 @@ export function registerProjectCommentRoutes(app: Express, ctx: RegisterProjectC
           return res.status(403).json({ error: 'not permitted' });
         }
         const existingAuthor = existing.authorMemberId ?? null;
+        if(!existingAuthor && ctx.resolveLocalCommentIdentity && !ctx.resolveLocalCommentIdentity(req,req.params.id)?.canManage) {
+          return res.status(403).json({error:'not permitted'});
+        }
         if (existingAuthor) {
           if (!authorMemberId || existingAuthor !== authorMemberId) {
             return res.status(403).json({ error: 'not permitted' });
@@ -648,7 +660,7 @@ export function registerProjectCommentRoutes(app: Express, ctx: RegisterProjectC
         }
       } else if (authorMemberId) {
         body.authorMemberId = authorMemberId;
-        const authorDisplayName = ctx.resolveCurrentAuthorDisplayName?.();
+        const authorDisplayName = ctx.resolveLocalCommentIdentity?.(req,req.params.id)?.displayName ?? ctx.resolveCurrentAuthorDisplayName?.();
         if (authorDisplayName?.trim()) body.authorDisplayName = authorDisplayName.trim();
       }
       if (existing?.sourceFileId) body.sourceFileId = existing.sourceFileId;

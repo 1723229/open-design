@@ -27,7 +27,11 @@ function pathsOf(svg: Element | null | undefined): Array<string | null> {
   return Array.from(svg?.querySelectorAll('path') ?? []).map((p) => p.getAttribute('d'));
 }
 
+const company = vi.hoisted(() => ({ enabled: false }));
+vi.mock('../../src/company/CompanyProvider', () => ({ useCompany: () => company }));
+
 afterEach(() => {
+  company.enabled = false;
   cleanup();
 });
 
@@ -112,6 +116,17 @@ describe('ComposerPlusMenu trigger', () => {
 });
 
 describe('ComposerPlusMenu rows', () => {
+  it('hides company plugins and connectors while keeping MCP and context actions', () => {
+    company.enabled = true;
+    renderMenu(fullMenuProps());
+    expect(topLevelRowIds(openMenu())).toEqual([
+      'composer-plus-attach', 'composer-plus-reference-project', 'composer-plus-local-code',
+      'composer-plus-figma', 'composer-plus-mcp',
+    ]);
+    expect(screen.queryByTestId('composer-plus-plugins')).toBeNull();
+    expect(screen.queryByTestId('composer-plus-connectors')).toBeNull();
+  });
+
   it('shows the paperclip on the attach row and a spinner while uploading', () => {
     const { rerender, props } = renderMenu();
     openMenu();

@@ -409,6 +409,7 @@ import {
 } from './project-split-layout';
 import type { SettingsSection } from './SettingsDialog';
 import { useCompanyProjectReadOnly } from '../company/useCompanyProjectReadOnly';
+import {useCompany} from '../company/CompanyProvider';
 import { Toast } from './Toast';
 import { FirstArtifactHint } from './FirstArtifactHint';
 import {
@@ -2516,6 +2517,7 @@ export function ProjectView({
   // keyed to `projectCollab.viewerOnly` below so an owner reinstall sees a
   // syncing project, not the misleading “shared by someone else” notice.
   const companyProjectReadOnly = useCompanyProjectReadOnly(projectReadsHeld ? null : project.id);
+  const company=useCompany();
   const projectMutationReadOnly =
     companyProjectReadOnly || projectCollab.viewerOnly || projectCollab.materializationPending
     || projectCollab.contentUpdatePending;
@@ -6646,8 +6648,8 @@ export function ProjectView({
   // create-form drafts are separate local state, so an in-flight comment the
   // user is typing is never clobbered.
   useEffect(() => {
-    if (!projectCollab.enabled || !activeConversationId) return undefined;
-    const pollMs = projectEventsSseConnected ? 30_000 : 5_000;
+    if ((!projectCollab.enabled && !company.enabled) || !activeConversationId) return undefined;
+    const pollMs = !company.enabled && projectEventsSseConnected ? 30_000 : 5_000;
     const interval = setInterval(() => {
       void refreshPreviewComments();
     }, pollMs);
@@ -6659,7 +6661,7 @@ export function ProjectView({
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [projectCollab.enabled, activeConversationId, refreshPreviewComments, projectEventsSseConnected]);
+  }, [projectCollab.enabled, company.enabled, activeConversationId, refreshPreviewComments, projectEventsSseConnected]);
 
   const savePreviewComment = useCallback(
     async (

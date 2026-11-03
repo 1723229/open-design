@@ -44,6 +44,7 @@ test('member bootstrap filters credentials and returns the supported SSE protoco
   app.get('/api/projects/p/files/a.html',(_req,res)=>res.type('html').send('<script>1</script>'));
   app.get('/api/projects/p/powered/a.html',(_req,res)=>res.type('html').send('<script>1</script>'));
   app.post('/api/projects/busy/files',(_req,res)=>res.json({ok:true}));
+  app.post('/api/projects/busy/conversations/c/comments',(_req,res)=>res.json({ok:true}));
   app.put('/api/projects/busy/conversations/c/messages/m',(_req,res)=>res.json({ok:true}));
   app.patch('/api/projects/busy/conversations/c',(_req,res)=>res.json({ok:true}));
   app.patch('/api/projects/busy',(_req,res)=>res.json({ok:true}));
@@ -61,6 +62,7 @@ test('member bootstrap filters credentials and returns the supported SSE protoco
   expect((await fetch(`${base}/api/projects/p/files/a.html`)).headers.get('content-security-policy')).toContain('sandbox');
   expect((await fetch(`${base}/api/projects/p/powered/a.html`)).status).toBe(403);
   expect((await fetch(`${base}/api/projects/busy/files`,{method:'POST',headers:{'content-type':'application/json'},body:'{}'})).status).toBe(409);
+  expect((await fetch(`${base}/api/projects/busy/conversations/c/comments`,{method:'POST',headers:{'content-type':'application/json'},body:'{}'})).status).toBe(200);
   expect((await fetch(`${base}/api/projects/busy/conversations/c/messages/m`,{method:'PUT',headers:{'content-type':'application/json'},body:'{}'})).status).toBe(200);
   expect((await fetch(`${base}/api/projects/busy/conversations/c`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({title:'Generated title'})})).status).toBe(200);
   expect((await fetch(`${base}/api/projects/busy`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({name:'Generated name',metadata:{kind:'other',nameSource:'agent'}})})).status).toBe(200);

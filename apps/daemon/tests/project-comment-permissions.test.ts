@@ -62,11 +62,13 @@ async function startServer({
   team = false,
   metadata = { kind: 'prototype' },
   measurement = 'recording',
+  local = false,
 }: {
   shared?: boolean;
   team?: boolean;
   metadata?: Record<string, unknown>;
   measurement?: 'noop' | 'recording' | 'throwing' | 'rejecting' | 'pending';
+  local?: boolean;
 } = {}) {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-comment-perms-'));
   const db = openDatabase(tempDir);
@@ -94,6 +96,13 @@ async function startServer({
   app.use(express.json());
   registerProjectCommentRoutes(app, {
     db,
+    ...(local ? {
+      resolveWorkspaceContext: async () => ({ok:true as const,context:null}),
+      resolveLocalCommentIdentity: (req: express.Request) => {
+        const id=req.headers.authorization?.replace('member:','');
+        return id ? {memberId:id,displayName:`LDAP ${id}`,canManage:id===OWNER} : null;
+      },
+    } : {}),
     projectStore: { updateProject, getWorkspaceProjectByProjectId } as any,
     conversations: {
       getConversation,
@@ -195,6 +204,25 @@ async function startServer({
 }
 
 describe('preview comment permission gating', () => {
+  it('uses the verified local identity for authors and management with no cloud workspace',async()=>{
+    const api=await startServer({local:true});
+    const route=`/api/projects/${PROJECT}/conversations/${CONVERSATION}/comments`;
+    const created=await api.json(route,{method:'POST',member:'reviewer',body:{target:api.commentTarget,note:'Review',authorMemberId:OWNER,authorDisplayName:'Forged owner'}});
+    expect(created.status).toBe(200);
+    expect(created.body.comment).toMatchObject({authorMemberId:'reviewer',authorDisplayName:'LDAP reviewer'});
+    const id=created.body.comment.id;
+    expect((await api.json(route,{method:'POST',member:'other',body:{id,target:api.commentTarget,note:'Hijack'}})).status).toBe(403);
+    expect((await api.json(`${route}/${id}`,{method:'DELETE',member:'other'})).status).toBe(403);
+    expect((await api.json(`${route}/${id}`,{method:'DELETE',member:OWNER})).status).toBe(200);
+    expect(api.listComments()).toEqual([]);
+  });
+  it('keeps authorless historical comments restricted to a local project manager',async()=>{
+    const api=await startServer({local:true});
+    const legacy=upsertPreviewComment(api.db,PROJECT,CONVERSATION,{target:api.commentTarget,note:'Historical feedback'})!;
+    const route=`/api/projects/${PROJECT}/conversations/${CONVERSATION}/comments`;
+    expect((await api.json(route,{method:'POST',member:'reviewer',body:{id:legacy.id,target:api.commentTarget,note:'Claim it'}})).status).toBe(403);
+    expect((await api.json(route,{method:'POST',member:OWNER,body:{id:legacy.id,target:api.commentTarget,note:'Managed history'}})).status).toBe(200);
+  });
   it.each(['noop', 'recording', 'throwing', 'rejecting', 'pending'] as const)('keeps successful creation and storage unchanged with %s measurement', async (measurement) => {
     const api = await startServer({ measurement });
     const route = `/api/projects/${PROJECT}/conversations/${CONVERSATION}/comments`;

@@ -131,7 +131,7 @@ import type {
   TrackingDesignSystemsEntryFrom,
 } from '@open-design/contracts/analytics';
 import { useI18n } from '../i18n';
-import { useWorkspaceContext } from '../collab/useWorkspaceContext';
+import { useResourceWorkspaceContext as useWorkspaceContext } from '../company/CompanyResourceContext';
 import { workspaceIdentityCacheKey } from '../collab/workspace-identity';
 
 // Source counts the embedded DS creation flow can report back to its

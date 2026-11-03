@@ -264,6 +264,7 @@ const PROJECT_STRING_FLAGS = new Set([
   'agent', 'model', 'service-tier', 'snapshot-id', 'inputs', 'grant-caps', 'editor',
   'title', 'label', 'against', 'seed-from', 'fork-after', 'mode',
   'source', 'out',
+  'team',
 ]);
 const PROJECT_RESOURCE_STRING_FLAGS = new Set([
   ...PROJECT_STRING_FLAGS,
@@ -7667,7 +7668,7 @@ async function runProject(args) {
   if (args[0] === 'share') return runProjectShare(args.slice(1));
   if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
     console.log(`Usage:
-  od project create [--name "<title>"] [--skill <id>] [--design-system <id>]
+  od project create [--name "<title>"] [--skill <id>] [--design-system <id>] [--team <id>]
                     [--plugin <id>] [--inputs <json>] [--metadata-json <path|->]
                     [--mode design|chat|plan] [--task-type motion-design]
                     [--prompt-file <path|->] [--json]
@@ -7789,6 +7790,7 @@ Common options:
       }
       if (!listResp.ok) return structuredHttpFailure(listResp);
       const data = await listResp.json();
+      if (typeof flags.team === 'string' && Array.isArray(data?.projects)) data.projects = data.projects.filter(project => project.companyTeamId === flags.team);
       if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       const projects = data?.projects ?? [];
       if (projects.length === 0) {
@@ -7882,6 +7884,7 @@ Common options:
         name,
         skillId:        flags.skill ?? null,
         designSystemId: flags['design-system'] ?? null,
+        ...(typeof flags.team === 'string' ? {companyTeamId:flags.team} : {}),
       };
       const conversationMode = normalizeChatSessionModeFlag(flags.mode);
       if (conversationMode) body.conversationMode = conversationMode;

@@ -162,6 +162,43 @@ describe('WorkspaceTabsBar navigation semantics', () => {
     document.querySelector('[data-testid="blank-workspace-area"]')?.remove();
   });
 
+  it.each([[false,'projects'],[true,'projects'],[true,'settings']] as const)('returns to the selected company space after opening a design (reload=%s, view=%s)', async (reload, entryView) => {
+    const dock = document.createElement('div');
+    document.body.appendChild(dock);
+    setWorkspaceTabsDock(dock);
+    try {
+      const scopedProject = {...project,companyTeamId:'business'};
+      const view = render(<WorkspaceTabsBar route={{kind:'home',view:entryView,companyTeamId:'business'}} projects={[scopedProject]} />);
+      view.rerender(<WorkspaceTabsBar route={projectRoute} projects={[scopedProject]} />);
+      if (reload) {
+        view.unmount();
+        render(<WorkspaceTabsBar route={projectRoute} projects={[scopedProject]} />);
+      }
+      fireEvent.click(await screen.findByTestId('workspace-home-chrome'));
+      expect(navigate).toHaveBeenLastCalledWith({kind:'home',view:'home',companyTeamId:'business'});
+    } finally { dock.remove(); }
+  });
+
+  it.each([undefined, 'business'])('uses the opened design ownership instead of another tab cached company space: %s', async companyTeamId => {
+    const dock = document.createElement('div');
+    document.body.appendChild(dock);
+    setWorkspaceTabsDock(dock);
+    try {
+      window.localStorage.setItem('open-design:workspace-tabs:v1',JSON.stringify({activeTabId:'entry',tabs:[{id:'entry',kind:'entry',view:'home',companyTeamId:'another-team',createdAt:1,lastActiveAt:1}]}));
+      render(<WorkspaceTabsBar route={projectRoute} projects={[{...project,companyTeamId}]} />);
+      fireEvent.click(await screen.findByTestId('workspace-home-chrome'));
+      expect(navigate).toHaveBeenLastCalledWith({kind:'home',view:'home',...(companyTeamId ? {companyTeamId} : {})});
+    } finally { dock.remove(); }
+  });
+
+  it('clears the company space when the user explicitly selects personal space', async () => {
+    const view = render(<WorkspaceTabsBar route={{kind:'home',view:'home',companyTeamId:'business'}} projects={[project]} />);
+    view.rerender(<WorkspaceTabsBar route={homeRoute} projects={[project]} />);
+    view.rerender(<WorkspaceTabsBar route={projectRoute} projects={[project]} />);
+    fireEvent.keyDown(document, {key:'t',metaKey:true});
+    expect(navigate).toHaveBeenLastCalledWith({kind:'home',view:'home'});
+  });
+
   it('keeps Home tab as a singleton and avoids duplication', async () => {
     const { rerender } = render(
       <WorkspaceTabsBar route={{ kind: 'home', view: 'home' }} projects={[project]} />,
@@ -1109,6 +1146,56 @@ describe('WorkspaceTabsBar identity-scope tab reset', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it.each([
+    ['anon::none', false], ['cloud-user::personal', false], ['company:previous-user::none', false],
+    ['anon::none', true], ['cloud-user::personal', true], ['company:previous-user::none', true],
+  ] as const)(
+    'keeps the first company team entry instead of restoring %s (delayed=%s)',
+    async (previousScope, delayed) => {
+      window.localStorage.setItem('open-design:workspace-tabs:v1', JSON.stringify({
+        scopeKey: previousScope,
+        tabs: [
+          { id: 'entry', kind: 'entry', view: 'home', createdAt: 1, lastActiveAt: 1 },
+          { id: 'old-project', kind: 'project', projectId: 'project-alpha', conversationId: null, fileName: null, createdAt: 2, lastActiveAt: 2 },
+        ],
+        activeTabId: 'old-project',
+      }));
+
+      const props = {
+        route: { kind: 'home', view: 'projects', companyTeamId: 'business' } as const,
+        projects: [project],
+      };
+      const view = render(<StrictMode><WorkspaceTabsBar
+        {...props}
+        identityScopeKey={delayed ? null : 'company:current-user::none'}
+      /></StrictMode>);
+      if (delayed) view.rerender(<StrictMode><WorkspaceTabsBar
+        {...props}
+        identityScopeKey="company:current-user::none"
+      /></StrictMode>);
+
+      await waitFor(() => {
+        const stored = JSON.parse(window.localStorage.getItem('open-design:workspace-tabs:v1') ?? '{}');
+        expect(stored.scopeKey).toBe('company:current-user::none');
+        expect(stored.tabs).toEqual([expect.objectContaining({
+          kind: 'entry', view: 'projects', companyTeamId: 'business',
+        })]);
+      });
+      expect(navigate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('still discards team tabs on a company account change after initialization', async () => {
+    const props = { route: { kind: 'home', view: 'projects', companyTeamId: 'business' } as const, projects: [project] };
+    const view = render(<WorkspaceTabsBar {...props} identityScopeKey="company:first-user::none" />);
+    view.rerender(<WorkspaceTabsBar {...props} identityScopeKey="company:second-user::none" />);
+    await waitFor(() => expect(navigate).toHaveBeenLastCalledWith(homeRoute));
+    const stored = JSON.parse(window.localStorage.getItem('open-design:workspace-tabs:v1') ?? '{}');
+    expect(stored.scopeKey).toBe('company:second-user::none');
+    expect(stored.tabs).toEqual([expect.objectContaining({ kind: 'entry', view: 'home' })]);
+    expect(stored.tabs[0].companyTeamId).toBeUndefined();
   });
 
   it('keeps the current route tab when the first identityScopeKey resolves over an unowned legacy snapshot', async () => {

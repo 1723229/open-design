@@ -1,4 +1,6 @@
 import { useCompany } from '../company/CompanyProvider';
+import { CompanyTeamsSwitcher } from '../company/CompanyTeams';
+import type { CompanyTeam } from '@open-design/contracts';
 import { SHOW_OFFICIAL_CLOUD } from '../product';
 import { useRegistrationInvite } from './useRegistrationInvite';
 // EntryShell — the centered-hero entry layout.
@@ -644,7 +646,7 @@ export function EntryShell({
   skills,
   designTemplates,
   designSystems,
-  projects,
+  projects: allProjects,
   templates,
   onDeleteTemplate,
   promptTemplates,
@@ -680,7 +682,7 @@ export function EntryShell({
   onSkillsRefresh,
   onSkillsChanged,
   onRefreshAgents,
-  onCreateProject,
+  onCreateProject: onCreateUnscopedProject,
   onBeginProjectCreation,
   onAmrBalanceGateBlockChange,
   onImportClaudeDesign,
@@ -710,6 +712,16 @@ export function EntryShell({
   // to /design-systems lands on that section. We derive the active
   // view from the route rather than keeping it in component state.
   const route = useRoute();
+  const companyTeamId = route.kind === 'home' ? route.companyTeamId : undefined;
+  const [companyTeam,setCompanyTeam] = useState<CompanyTeam|null>(null);
+  const projects = useMemo(() => company.enabled && company.teamsEnabled
+    ? allProjects.filter(project => (project.companyTeamId ?? undefined) === companyTeamId)
+    : allProjects,[allProjects,company.enabled,company.teamsEnabled,companyTeamId]);
+  const createInCompanyTeam = useCallback((input: EntryCreateProjectInput) => {
+    if (companyTeamId && (!companyTeam || companyTeam.id !== companyTeamId || !companyTeam.canWrite)) return false;
+    return onCreateUnscopedProject({...input,...(companyTeamId ? {companyTeamId} : {})});
+  },[companyTeamId,companyTeam?.id,companyTeam?.canWrite,onCreateUnscopedProject]);
+  const onCreateProject = companyTeamId ? createInCompanyTeam : onCreateUnscopedProject;
   const view: EntryViewKind = route.kind === 'home' ? route.view : 'home';
   const [inviteSignInRequest, setInviteSignInRequest] = useState<'start' | 'waiting' | null>(null);
   useEffect(() => {
@@ -1457,7 +1469,7 @@ export function EntryShell({
         element: navElement,
       });
     }
-    navigate({ kind: 'home', view: next });
+    navigate({ kind: 'home', view: next, ...(companyTeamId ? { companyTeamId } : {}) });
   }
 
   // Project collection surfaces have no legacy page-level tracker. Community
@@ -2157,7 +2169,7 @@ export function EntryShell({
   };
 
   return (
-    <div className={`entry-shell entry-shell--no-header${['home', 'all-projects', 'projects', 'drafts'].includes(view) ? ` ${styles.memberFrame}` : ''}`}>
+    <div className={`entry-shell entry-shell--no-header${company.enabled && company.teamsEnabled ? ` ${styles.companySpaces}` : ''}${['home', 'all-projects', 'projects', 'drafts'].includes(view) ? ` ${styles.memberFrame}` : ''}`}>
       {homeConcurrencyBlock && homeConcurrencyPresentation && homeConcurrencyBlock.identity === homeFundingIdentity ? (
         <AmrConcurrencyDialog pageName="home" stage="before_run" branch={homeConcurrencyPresentation.branch}
           upgradeAllowed={homeConcurrencyPresentation.upgradeAllowed}
@@ -2172,6 +2184,7 @@ export function EntryShell({
         // track (the base 56px icon-rail clips the labels + team affordances).
         style={{ ['--entry-rail-width' as string]: '236px' }}
       >
+        {company.enabled && company.teamsEnabled && railOpen && <button type="button" className={styles.mobileRailBackdrop} aria-label={t('common.close')} onClick={() => setRailOpen(false)} />}
         <EntryNavRail
           view={view}
           onViewChange={changeView}
@@ -2186,6 +2199,7 @@ export function EntryShell({
           onOpenSearch={() => setProjectSearchOpen(true)}
           open={railOpen}
           inviteSlot={<HomeInviteTrigger signedOut={amrLoggedIn === false} context={railWorkspaceContext} />}
+          workspaceSwitcher={company.enabled && company.teamsEnabled ? <CompanyTeamsSwitcher key={company.user?.id} onTeamResolved={setCompanyTeam} /> : undefined}
           topRightSlot={<>
             {topRightCampaignAudience || (homeCampaignHostsVisible && amrLoggedIn === true) ? (
             <>
@@ -2291,7 +2305,7 @@ export function EntryShell({
               ) : (
                 <div className="entry-section">
                   <header className="entry-section__head">
-                    <h1 className="entry-section__title">{t('entry.navProjects')}</h1>
+                    <h1 className="entry-section__title">{companyTeamId ? companyTeam?.name ?? t('common.loading') : t('entry.navProjects')}</h1>
                   </header>
                   <DesignsTab
                     projects={projects}
@@ -2304,7 +2318,7 @@ export function EntryShell({
                     onRename={onRenameProject}
                     onRefresh={onProjectsRefresh}
                     isActive={view === 'projects'}
-                    onNewProject={() => {
+                    onNewProject={companyTeamId && !companyTeam?.canWrite ? undefined : () => {
                       openNewProject();
                     }}
                   />
@@ -2532,7 +2546,9 @@ export function EntryShell({
                     onDuplicate={onDuplicateProject}
                     onRename={onRenameProject}
                     canAssignInviteRoles={workspaceContext?.permissions.canInviteMembers === true}
-                    canManageProjectCollection={workspaceContext?.permissions.canShareProjects === true}
+                    canManageProjectCollection={company.enabled
+                      ? projectSearchProjects.some(project => project.companyAccess?.canManage)
+                      : workspaceContext?.permissions.canShareProjects === true}
                   />
                 </div>
               )

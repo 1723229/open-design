@@ -15,6 +15,7 @@ import { McpClientSection } from './McpClientSection';
 import { SkillsSection } from './SkillsSection';
 import { UseEverywhereGuidePanel } from './UseEverywhereModal';
 import { useT } from '../i18n';
+import { useCompany } from '../company/CompanyProvider';
 
 export type IntegrationTab = 'mcp' | 'connectors' | 'skills' | 'use-everywhere';
 
@@ -54,6 +55,9 @@ export function IntegrationsView({
   onSkillsChanged,
 }: Props) {
   const t = useT();
+  const company = useCompany();
+  const selectedInitialTab = company.enabled && (initialTab === 'connectors' || initialTab === 'use-everywhere') ? 'mcp' : initialTab;
+  const visibleTabs = INTEGRATION_TABS.filter(tab => !company.enabled || tab.id === 'mcp' || tab.id === 'skills');
   const analytics = useAnalytics();
   const integrationsPageViewFiredRef = useRef(false);
   useEffect(() => {
@@ -61,14 +65,14 @@ export function IntegrationsView({
     integrationsPageViewFiredRef.current = true;
     trackPageView(analytics.track, { page_name: 'integrations' });
   }, [analytics.track]);
-  const [activeTab, setActiveTab] = useState<IntegrationTab>(initialTab);
+  const [activeTab, setActiveTab] = useState<IntegrationTab>(selectedInitialTab);
   usePageNavigationReady({ page: 'integrations', visible: true, ready: activeTab === 'use-everywhere' || (activeTab === 'connectors' && !composioConfigLoading) });
   const [localConfig, setLocalConfig] = useState<AppConfig>(config);
   const localConfigRef = useRef(localConfig);
 
   useEffect(() => {
-    setActiveTab(initialTab);
-  }, [initialTab]);
+    setActiveTab(selectedInitialTab);
+  }, [selectedInitialTab]);
 
   useEffect(() => {
     setLocalConfig((current) => {
@@ -137,7 +141,7 @@ export function IntegrationsView({
         role="tablist"
         aria-label={t('integrations.areasAria')}
       >
-        {INTEGRATION_TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const active = tab.id === activeTab;
           return (
             <button

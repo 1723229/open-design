@@ -263,6 +263,7 @@ export function createOdNextInitialPromptBundleService(
       freeformDeckSignal: intentSignals.deck,
       mediaHintSignal: intentSignals.media,
       platformHintSignal: intentSignals.platform,
+      companyActorId: (meta as unknown as Record<string, unknown>).companyActorId,
       devicePlatformSignal: intentSignals.devicePlatform,
       workspaceScope: meta.workspaceScope,
       frozenSkillPackage,

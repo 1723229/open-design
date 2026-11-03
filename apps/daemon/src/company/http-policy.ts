@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { Express } from 'express';
+import type { Express, RequestHandler } from 'express';
 import type { AgentInfo, CompanyModelRoute } from '@open-design/contracts';
 import type { AppConfigPrefs } from '../app-config.js';
 import type { CompanyRuntime } from './routes.js';
@@ -7,6 +7,19 @@ import { getCompanyTask } from './routes.js';
 import { companyMemberProjectPatchAllowed, companyRequestIsWrite } from './policy.js';
 import { managedCompanyConfig, managedCompanyRunBody, publicCompanyConfig } from './managed-agent.js';
 import { resolveCompanyInputPaths } from './input-paths.js';
+
+/** Company diagnostics use the authenticated administrator; local mode keeps its original guard. */
+export function createCompanyDiagnosticsAccess(
+  company: Pick<CompanyRuntime, 'enabled' | 'getUser'>,
+  requireLocalRequest: RequestHandler,
+): RequestHandler {
+  return (req, res, next) => {
+    if (!company.enabled) return requireLocalRequest(req, res, next);
+    const user = company.getUser(req);
+    if (user?.role !== 'admin') return void res.status(user ? 403 : 401).json({error:'Administrator access required'});
+    next();
+  };
+}
 
 /** The original settings UI may edit generation preferences, never managed routing. */
 function agentPreferences(input: unknown, saved: AppConfigPrefs['agentModels']): AppConfigPrefs['agentModels'] | null {
@@ -70,7 +83,7 @@ export function installCompanyHttpPolicy(app: Express, deps: {
     const projectMutation = /^\/api\/projects\/([^/]+)(?:\/(.*))?$/u.exec(req.path);
     if (projectMutation && companyRequestIsWrite(req) && !getCompanyTask(req)) {
       const operation = projectMutation[2] ?? '';
-      const readOrInput = /^(?:tabs|export(?:\/.*)?|archive(?:\/.*)?|preview(?:\/.*)?|preview-url|submissions|comments\/read)$/u.test(operation);
+      const readOrInput = /^(?:tabs|export(?:\/.*)?|archive(?:\/.*)?|preview(?:\/.*)?|preview-url|submissions|comments\/read|conversations\/[^/]+\/comments(?:\/.*)?)$/u.test(operation);
       const conversationSync = (req.method === 'PUT' && /^conversations\/[^/]+\/messages\/[^/]+$/u.test(operation))
         || (req.method === 'PATCH' && /^conversations\/[^/]+$/u.test(operation));
       const presentationSync = req.method === 'PATCH' && !operation && companyMemberProjectPatchAllowed(req.body);

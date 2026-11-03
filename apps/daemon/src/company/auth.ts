@@ -9,6 +9,7 @@ import { CompanyStore, type CompanyStoredSession, type LdapIdentity } from './st
 export interface CompanyLdap {
   authenticate(username: string, password: string): Promise<LdapIdentity | null>;
   recheck(identity: LdapIdentity): Promise<boolean>;
+  lookup?(entryUUID: string): Promise<LdapIdentity | null>;
 }
 
 export function companyProviderFingerprint(config: CompanyConfig): string {
@@ -79,6 +80,7 @@ export function createLdapDirectory(config: CompanyLdapConfig, clientFactory?: (
       return serviceSearch(config.userFilter.replaceAll('{username}', escapeLdapFilter(username)), password);
     },
     recheck: async (identity) => Boolean(await serviceSearch(`(&(${config.entryUUIDAttribute}=${escapeLdapFilter(identity.entryUUID)})${config.userFilter.replaceAll('{username}', escapeLdapFilter(identity.username))})`)),
+    lookup: async (entryUUID) => serviceSearch(`(&(${config.entryUUIDAttribute}=${escapeLdapFilter(entryUUID)})${config.userFilter.replaceAll('{username}', '*')})`),
   };
 }
 
@@ -145,6 +147,19 @@ export class CompanyAuth {
   createSession(principal: CompanyUser): { token: string; csrfToken: string } {
     if (this.store.getUser(principal.id)?.disabled !== false) throw new Error('User is disabled');
     return this.store.createSession(principal.id);
+  }
+
+  async loginFederated(entryUUID: string): Promise<CompanyUser | null> {
+    if (this.config.auth.mode !== 'ldap' || !this.ldap?.lookup) return null;
+    try {
+      const identity = await this.ldap.lookup(entryUUID);
+      if (!identity || identity.entryUUID !== entryUUID) return null;
+      const principal = this.store.upsertLdapUser(identity);
+      if (principal.disabled) return null;
+      this.eligibility.set(principal.id, {checkedAt: this.now(), eligible: true});
+      this.store.audit(principal.id, 'login.federated', principal.id);
+      return principal;
+    } catch { return null; }
   }
 
   async session(token: string): Promise<CompanyStoredSession | null> {

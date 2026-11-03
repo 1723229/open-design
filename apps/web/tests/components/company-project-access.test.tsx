@@ -7,6 +7,14 @@ import { I18nProvider } from '../../src/i18n';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 function Access({ projectId = 'project-1' }: { projectId?: string | null }) { const readOnly = useCompanyProjectReadOnly(projectId); return <button disabled={readOnly}>Edit project</button>; }
+it.each([false,true])('honors server write permission for platform administrators: %s',async canWrite=>{
+  vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL)=>Response.json(String(input)==='/api/company/session'
+    ? {enabled:true,user:{id:'admin',username:'admin',role:'admin',mustChangePassword:false},csrfToken:'token',presentation:{showAgentIdentity:false,hiddenSettingsSections:[]}}
+    : {members:[],canManage:false,canWrite})));
+  render(<I18nProvider initial="en"><CompanyProvider><Access/></CompanyProvider></I18nProvider>);
+  const button=await screen.findByRole('button',{name:'Edit project'});
+  await vi.waitFor(()=>expect((button as HTMLButtonElement).disabled).toBe(!canWrite));
+});
 it.each(['viewer', 'editor', 'owner'] as const)('uses server membership to gate project changes for %s', async role => {
   vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: RequestInfo | URL) => Response.json(String(input) === '/api/company/session' ? { enabled: true, user: { id: 'alice', username: 'Alice', role: 'member', mustChangePassword: false }, csrfToken: 'token', presentation: { showAgentIdentity: false, hiddenSettingsSections: ['labs', 'integrations'] } } : { members: [{ userId: 'alice', username: 'Alice', role }], canManage: role === 'owner' })));
   render(<I18nProvider initial="en"><CompanyProvider><Access /></CompanyProvider></I18nProvider>);

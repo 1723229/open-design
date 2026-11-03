@@ -19,6 +19,12 @@ import { describe, expect, it } from 'vitest';
 
 import { buildPath, parseRoute, type Route } from '../src/router';
 
+it('preserves the local team when opening original asset creation and detail routes',()=>{
+  expect(parseRoute('/teams/team-a/design-systems/create')).toEqual({kind:'design-system-create',companyTeamId:'team-a'});
+  expect(buildPath({kind:'design-system-detail',designSystemId:'user:brand',companyTeamId:'team-a'})).toBe('/teams/team-a/design-systems/user%3Abrand');
+  expect(parseRoute('/teams/team-a/marketplace/plugin-a')).toEqual({kind:'marketplace-detail',pluginId:'plugin-a',companyTeamId:'team-a'});
+});
+
 function roundTrip(route: Route): Route {
   return parseRoute(buildPath(route));
 }

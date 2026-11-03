@@ -62,6 +62,7 @@ import {
   useProjectDuplicateFlow,
 } from './project-actions/useProjectDuplicateFlow';
 import { useWorkspaceProjectMove } from './project-actions/useWorkspaceProjectMove';
+import {CompanyProjectMoveMenuItem,useCompanyProjectMove} from '../company/CompanyProjectMove';
 import { MoveToTeamConfirmDialog, moveConfirmSkipped } from './MoveToTeamConfirmDialog';
 import actionStyles from './WorkspaceProjectActions.module.css';
 import { acknowledgeProjectCompletion, useProjectRunStatuses } from '../hooks/useProjectRunStatuses';
@@ -91,6 +92,7 @@ type WorkspaceChromeTab =
       id: string;
       kind: 'entry';
       view: EntryHomeView;
+      companyTeamId?: string;
       createdAt: number;
       lastActiveAt: number;
     }
@@ -269,11 +271,12 @@ function nowId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function createEntryTab(view: EntryHomeView, timestamp = Date.now()): WorkspaceChromeTab {
+function createEntryTab(view: EntryHomeView, timestamp = Date.now(), companyTeamId?: string): WorkspaceChromeTab {
   return {
     id: `entry:${view}:${nowId()}`,
     kind: 'entry',
     view,
+    ...(companyTeamId ? {companyTeamId} : {}),
     createdAt: timestamp,
     lastActiveAt: timestamp,
   };
@@ -301,7 +304,7 @@ function tabFromRoute(route: Route, timestamp = Date.now()): WorkspaceChromeTab 
       lastActiveAt: timestamp,
     };
   }
-  return createEntryTab(route.kind === 'home' ? route.view : 'design-systems', timestamp);
+  return createEntryTab(route.kind === 'home' ? route.view : 'design-systems', timestamp, route.kind === 'home' ? route.companyTeamId : undefined);
 }
 
 function routeForTab(tab: WorkspaceChromeTab): Route {
@@ -318,7 +321,7 @@ function routeForTab(tab: WorkspaceChromeTab): Route {
       ? { kind: 'marketplace-detail', pluginId: tab.pluginId }
       : { kind: 'marketplace' };
   }
-  return { kind: 'home', view: tab.view };
+  return { kind: 'home', view: tab.view, ...(tab.companyTeamId ? {companyTeamId:tab.companyTeamId} : {}) };
 }
 
 function reviveTab(value: unknown): WorkspaceChromeTab | null {
@@ -337,8 +340,9 @@ function reviveTab(value: unknown): WorkspaceChromeTab | null {
       || view === 'plugins'
       || view === 'design-systems'
       || view === 'integrations'
+      || view === 'settings'
     ) {
-      return { id, kind: 'entry', view, createdAt, lastActiveAt };
+      return { id, kind: 'entry', view, createdAt, lastActiveAt, ...(typeof record.companyTeamId === 'string' && record.companyTeamId ? {companyTeamId:record.companyTeamId} : {}) };
     }
   }
   if (record.kind === 'project' && typeof record.projectId === 'string') {
@@ -659,7 +663,7 @@ function syncStateToRoute(state: WorkspaceTabsState, route: Route): WorkspaceTab
         ...current,
         tabs: current.tabs.map((tab) =>
           tab.id === existingEntryTab.id
-            ? { ...tab, view: route.view, lastActiveAt: timestamp }
+            ? { ...tab, view: route.view, companyTeamId:route.companyTeamId, lastActiveAt: timestamp }
             : tab,
         ),
         activeTabId: existingEntryTab.id,
@@ -894,6 +898,7 @@ export function WorkspaceTabsBar({
   onDuplicateProject,
   onDeleteProject,
 }: Props) {
+  const companyMove=useCompanyProjectMove();
   const t = useT();
   const analytics = useAnalytics();
   // Same binding the rail's own collapse control advertised (EntryShell owns
@@ -1381,6 +1386,8 @@ export function WorkspaceTabsBar({
   );
   useEffect(() => {
     if (identityScopeKey === null) return;
+    // StrictMode can replay this effect before the incoming scope state commits.
+    if (pendingScopeStateRef.current && pendingScopeStateRef.current.scopeKey === identityScopeKey) return;
     const pendingScopeRoute = pendingScopeRouteRef.current;
     if (
       pendingScopeRoute
@@ -1468,6 +1475,19 @@ export function WorkspaceTabsBar({
     const firstResolvedScope = !resolvedScopeOnceRef.current;
     resolvedScopeOnceRef.current = true;
     if (previous === identityScopeKey) return;
+
+    // A company entry URL is the destination of the authenticated SSO flow,
+    // not a workspace switch restored from browser chrome. Keep that explicit
+    // destination on first resolution without adopting the old account's tabs.
+    if (firstResolvedScope && previous !== undefined && identityScopeKey.startsWith('company:')
+      && route.kind === 'home' && route.companyTeamId) {
+      const incoming = syncStateToRoute(freshHomeTabsState(), route);
+      persistedTabsStore.scopes[identityScopeKey] = { state: incoming, updatedAt: Date.now() };
+      pendingScopeStateRef.current = { scopeKey: identityScopeKey, state: incoming };
+      pendingScopeRouteRef.current = null;
+      setState(incoming);
+      return;
+    }
 
     if (previous === undefined) {
       // Upgrade compatibility, held to the attribution rule (recvqziATl6LlJ /
@@ -1864,8 +1884,9 @@ export function WorkspaceTabsBar({
     // entry section (projects / design-systems / …) the tab last showed.
     // Keyboard tab-cycling goes through activateTab directly and keeps the
     // remembered section.
-    if (tab.kind === 'entry' && tab.view !== 'home') {
-      activateTab({ ...tab, view: 'home' });
+    if (tab.kind === 'entry') {
+      const project = route.kind === 'project' ? projects.find(item => item.id === route.projectId) : undefined;
+      activateTab({ ...tab, view: 'home', ...(project ? {companyTeamId:project.companyTeamId ?? undefined} : {}) });
       return;
     }
     // Opening a project is what spends its ✓ (per product) — the same rule,
@@ -1933,7 +1954,7 @@ export function WorkspaceTabsBar({
       const tab = createEntryTab(view);
       setState({ tabs: [...normalized.tabs, tab], activeTabId: tab.id });
     }
-    navigate({ kind: 'home', view });
+    navigate({ kind: 'home', view, ...(existingEntryTab?.companyTeamId ? {companyTeamId:existingEntryTab.companyTeamId} : {}) });
     setRadialMenu(null);
   }
 
@@ -1965,7 +1986,7 @@ export function WorkspaceTabsBar({
         ...normalized,
         activeTabId: existingEntryTab.id,
       });
-      navigate({ kind: 'home', view: 'home' });
+      navigate({ kind: 'home', view: 'home', ...(existingEntryTab.companyTeamId ? {companyTeamId:existingEntryTab.companyTeamId} : {}) });
     } else {
       const tab = createEntryTab('home');
       setState({
@@ -2323,7 +2344,7 @@ export function WorkspaceTabsBar({
                   <button
                     type="button"
                     role="menuitem"
-                    disabled={!dockActionsOwnedBySelf}
+                    disabled={dockActionsProject.companyAccess ? !dockActionsProject.companyAccess.canWrite : !dockActionsOwnedBySelf}
                     title={dockActionsForeignTitle}
                     onClick={() => {
                       setDockActionsProjectId(null);
@@ -2339,7 +2360,7 @@ export function WorkspaceTabsBar({
                   <button
                     type="button"
                     role="menuitem"
-                    disabled={!dockActionsOwnedBySelf || dockDuplicatingId !== null}
+                    disabled={(dockActionsProject.companyAccess ? !dockActionsProject.companyAccess.canWrite : !dockActionsOwnedBySelf) || dockDuplicatingId !== null}
                     title={dockActionsForeignTitle}
                     onClick={() => { void duplicateFromDock(dockActionsProject); }}
                   >
@@ -2359,6 +2380,7 @@ export function WorkspaceTabsBar({
                 {/* Hidden, not disabled, without a team plane (see
                     `moveToTeamAvailable`); a shared row and a foreign row
                     keep the item and explain themselves instead. */}
+                <CompanyProjectMoveMenuItem project={dockActionsProject} onRequest={project=>{companyMove.request(project);setDockActionsProjectId(null);setDockMenuOpen(false);}}/>
                 {moveToTeamAvailable ? (
                   <button
                     type="button"
@@ -2394,7 +2416,7 @@ export function WorkspaceTabsBar({
                     type="button"
                     role="menuitem"
                     className={actionStyles.danger}
-                    disabled={!dockActionsOwnedBySelf}
+                    disabled={dockActionsProject.companyAccess ? !dockActionsProject.companyAccess.canManage : !dockActionsOwnedBySelf}
                     title={dockActionsForeignTitle}
                     onClick={() => {
                       // The confirmation (the shared project delete dialog,
@@ -2722,6 +2744,7 @@ export function WorkspaceTabsBar({
         />,
         document.body,
       ) : null}
+      {companyMove.dialog}
       {moveTarget ? (
         <MoveToTeamConfirmDialog
           action="to-team"

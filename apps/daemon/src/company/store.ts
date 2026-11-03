@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import type Database from 'better-sqlite3';
+import { CompanyTeams } from './teams.js';
 import type { CompanyProjectMember, CompanyProjectRole, CompanyUser, CompanyUserUpdateRequest, ProjectTabsState } from '@open-design/contracts';
 
 export interface LdapIdentity { entryUUID: string; username: string; displayName?: string }
@@ -33,6 +34,7 @@ function passwordHash(password: string): string {
 /** Additive tables in the same SQLite transaction domain as project persistence. */
 export class CompanyStore {
   private readonly listeners = new Set<(event: CompanyRevocation) => void>();
+  readonly teams: CompanyTeams;
 
   constructor(readonly database: Database.Database, private readonly now: () => number = Date.now) {
     database.exec(`
@@ -64,6 +66,7 @@ export class CompanyStore {
         tabs_json TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(project_id,user_id)
       );
     `);
+    this.teams = new CompanyTeams(this, event => this.notify(event), now);
   }
 
   wasEnabled(): boolean { return Boolean(this.database.prepare("SELECT 1 FROM company_state WHERE key='enabled'").get()); }
@@ -194,11 +197,17 @@ export class CompanyStore {
   }
 
   registerProjectOwner(projectId: string, owner: CompanyUser): void {
+    if (this.teams.projectTeamId(projectId)) throw new Error('Team designs inherit membership');
     this.database.prepare("INSERT INTO company_project_members (project_id,user_id,role) VALUES (?,?,'owner')").run(projectId, owner.id);
     this.audit(owner.id, 'project.created', projectId);
   }
 
   projectRole(projectId: string, userId: string): CompanyProjectRole | null {
+    const teamId = this.teams.projectTeamId(projectId);
+    if (teamId) {
+      const role = this.teams.role(teamId, userId);
+      return role === 'admin' ? 'owner' : role;
+    }
     return (this.database.prepare('SELECT role FROM company_project_members WHERE project_id=? AND user_id=?').get(projectId, userId) as { role: CompanyProjectRole } | undefined)?.role ?? null;
   }
 
@@ -206,21 +215,35 @@ export class CompanyStore {
     if (!principal) return false;
     const current = this.getUser(principal.id);
     if (!current || current.disabled || current.mustChangePassword) return false;
+    const teamId = this.teams.projectTeamId(projectId);
+    if (teamId) return this.teams.canAccess(current, teamId, write);
     if (current.role === 'admin') return true;
     const role = this.projectRole(projectId, current.id);
     return role !== null && (!write || role !== 'viewer');
   }
 
   canManage(principal: CompanyUser, projectId: string): boolean {
+    const teamId = this.teams.projectTeamId(projectId);
+    if (teamId) return this.teams.canAccess(principal, teamId, true) && this.teams.canManage(principal, teamId);
     return this.canAccess(principal, projectId, true) && (principal.role === 'admin' || this.projectRole(projectId, principal.id) === 'owner');
   }
 
+  canComment(principal: Pick<CompanyUser, 'id'> | null, projectId: string): boolean {
+    if (!this.canAccess(principal, projectId)) return false;
+    const teamId = this.teams.projectTeamId(projectId);
+    const team = teamId ? this.teams.get(teamId) : null;
+    return !teamId || Boolean(team && team.status === 'active' && !team.stale);
+  }
+
   members(projectId: string): CompanyProjectMember[] {
+    const teamId = this.teams.projectTeamId(projectId);
+    if (teamId) return this.teams.members(teamId).map(member => ({...member, role: member.role === 'admin' ? 'owner' : member.role}));
     return this.database.prepare(`SELECT m.user_id AS userId,u.username,m.role FROM company_project_members m
       JOIN company_users u ON u.id=m.user_id WHERE m.project_id=? ORDER BY u.username`).all(projectId) as CompanyProjectMember[];
   }
 
   setMember(projectId: string, userId: string, role: CompanyProjectRole, actorId: string): void {
+    if (this.teams.projectTeamId(projectId)) throw new Error('Team designs inherit membership');
     const before = this.projectRole(projectId, userId);
     this.database.transaction(() => {
       this.database.prepare('INSERT INTO company_project_members VALUES (?,?,?) ON CONFLICT(project_id,user_id) DO UPDATE SET role=excluded.role').run(projectId, userId, role);
@@ -231,6 +254,7 @@ export class CompanyStore {
   }
 
   removeMember(projectId: string, userId: string, actorId: string): void {
+    if (this.teams.projectTeamId(projectId)) throw new Error('Team designs inherit membership');
     this.database.prepare('DELETE FROM company_project_members WHERE project_id=? AND user_id=?').run(projectId, userId);
     this.audit(actorId, 'member.removed', `${projectId}/${userId}`);
     this.notify({ userId, projectId, reason: 'permissions' });

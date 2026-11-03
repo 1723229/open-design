@@ -2,11 +2,12 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { CompanyProvider } from '../../src/company/CompanyProvider';
+import { setHomeHeroPrompt } from '../helpers/home-hero-lexical';
 import { I18nProvider } from '../../src/i18n';
 import { SettingsDialog } from '../../src/components/SettingsDialog';
 import { InlineModelSwitcher } from '../../src/components/InlineModelSwitcher';
 import { AvatarMenu } from '../../src/components/AvatarMenu';
-import { EntryTopRightCluster } from '../../src/components/EntryNavRail';
+import { EntryNavRail, EntryTopRightCluster } from '../../src/components/EntryNavRail';
 import { HomeView } from '../../src/components/HomeView';
 import { MessageCenter } from '../../src/components/MessageCenter';
 import { FileViewer } from '../../src/components/FileViewer';
@@ -24,6 +25,23 @@ function session(role: 'admin' | 'member') {
 }
 const agents = [{ id: 'codex', name: 'Codex', bin: 'codex', available: true }];
 const settingsProps = { agents, daemonLive: true, appVersionInfo: null, onPersist: vi.fn(), onPersistComposioKey: vi.fn(), onClose: vi.fn(), onRefreshAgents: vi.fn() };
+
+it.each(['member', 'admin'] as const)('shows the company settings destination only to administrators: %s', async role => {
+  session(role);
+  render(<I18nProvider initial="en"><CompanyProvider><span>Rail ready</span><EntryNavRail view="home" onViewChange={vi.fn()} onNewProject={vi.fn()} open context={null} onOpenSettings={vi.fn()} /></CompanyProvider></I18nProvider>);
+  await screen.findByText('Rail ready');
+  expect(screen.queryByTestId('entry-settings-button') !== null).toBe(role === 'admin');
+  expect(screen.getByTestId('entry-nav-plugins').textContent).toContain('Skills');
+});
+
+it('keeps only files, skills and MCP in the company Home mention picker', async () => {
+  session('member');
+  render(<I18nProvider initial="en"><CompanyProvider><HomeView projects={[]} onSubmit={() => {}} onOpenProject={() => {}} /></CompanyProvider></I18nProvider>);
+  await screen.findByTestId('home-hero-input');
+  setHomeHeroPrompt('@');
+  await waitFor(() => expect(screen.getByTestId('home-hero-plugin-picker')).toBeTruthy());
+  expect(screen.getAllByRole('tab').map(tab => tab.textContent?.replace(/\d+/g, '').trim())).toEqual(['All', 'Design files', 'Skills', 'MCP']);
+});
 
 it('allows company project deletion without a disabled official cloud sharing check', async () => {
   const fetchMock = session('admin');

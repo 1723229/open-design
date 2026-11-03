@@ -10,12 +10,17 @@ import {
 } from '@open-design/contracts';
 
 const workspaceMock = vi.hoisted(() => ({
+  companyContext: null as WorkspaceCollabContext | null,
   state: {
     context: null as WorkspaceCollabContext | null,
     loading: false,
     identityChangePending: false,
     failure: undefined as 'unsupported' | 'unavailable' | undefined,
   },
+}));
+
+vi.mock('../../src/company/CompanyResourceContext', () => ({
+  useResourceWorkspaceContext: () => ({...workspaceMock.state,context:workspaceMock.companyContext ?? workspaceMock.state.context}),
 }));
 
 const workspaceInvalidationHarness = vi.hoisted(() => ({
@@ -194,6 +199,7 @@ describe('HomeView workspace-scoped plugin catalog', () => {
     cleanup();
     vi.unstubAllGlobals();
     resetWorkspaceContextCache();
+    workspaceMock.companyContext = null;
     workspaceMock.state = {
       context: null,
       loading: false,
@@ -202,6 +208,21 @@ describe('HomeView workspace-scoped plugin catalog', () => {
     };
     workspaceInvalidationHarness.onActive.length = 0;
     workspaceInvalidationHarness.autoActivate = true;
+  });
+
+  it('uses company team scope for the Home plugin catalogue', async () => {
+    const requests: Array<{url:string;headers:Headers}> = [];
+    workspaceMock.companyContext = {...teamContext('company-team','company-user'),identitySource:'company'};
+    vi.stubGlobal('fetch',vi.fn<typeof fetch>(async(input,init)=>{
+      const url=String(input);requests.push({url,headers:new Headers(init?.headers)});
+      return Response.json(url==='/api/plugins'?{plugins:[plugin('company-plugin')]}:{});
+    }));
+    renderHome();
+    await screen.findByRole('button',{name:'active-company-plugin'});
+    for(const item of requests.filter(item=>item.url==='/api/plugins')) {
+      expect(item.headers.get('x-nexus-resource-workspace-id')).toBe('company-team');
+      expect(item.headers.get('x-nexus-resource-member-id')).toBe('company-user');
+    }
   });
 
   it('masks the provisional catalog until the first Workspace-scoped read settles', async () => {

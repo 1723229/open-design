@@ -18,6 +18,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceCollabContext } from '@open-design/contracts';
+import {workspaceProjectHeaders,workspaceResourceUrl} from '../../src/collab/workspace-identity';
 
 import {
   beginWorkspaceScopedRead,
@@ -37,6 +38,13 @@ const complete = {
   lifecycleState: 'active',
   permissions: { canShareProjects: true, canWriteSyncedFiles: true },
 } as unknown as WorkspaceCollabContext;
+
+it('carries local resource selectors separately from official cloud project authority',()=>{
+  const local={...complete,identitySource:'company' as const};
+  expect(workspaceProjectHeaders(local)).toEqual({'x-nexus-resource-workspace-id':'ws-1','x-nexus-resource-member-id':'wm-1'});
+  expect(workspaceResourceUrl('/api/skills/example/assets/icon.svg',local)).toBe('/api/skills/example/assets/icon.svg?companyWorkspaceId=ws-1&companyMemberId=wm-1');
+  expect(workspaceIdentityCacheKey(local)).not.toBe(workspaceIdentityCacheKey(complete));
+});
 
 describe('workspaceIdentityCacheKey is total', () => {
   it('computes a key for a context with no permissions instead of throwing', () => {

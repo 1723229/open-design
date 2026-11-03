@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type {CompanyTaskStatusResponse} from '@open-design/contracts';
 
 /** Both the app's better-sqlite3 handle and Node's SQLite test handle implement this boundary. */
 export interface QueueDatabase {
@@ -79,6 +80,16 @@ export class CompanyJobQueue {
       ? this.db.prepare('SELECT * FROM company_jobs WHERE userId=? ORDER BY createdAt,rowid').all(userId)
       : this.db.prepare('SELECT * FROM company_jobs ORDER BY createdAt,rowid').all();
     return rows.map((row) => decode(row)!);
+  }
+
+  status(userId:string):CompanyTaskStatusResponse {
+    const usage=this.db.prepare(`SELECT COUNT(CASE WHEN state='running' THEN 1 END) AS globalRunning,
+      COUNT(CASE WHEN state='running' AND userId=? THEN 1 END) AS userRunning,
+      COUNT(CASE WHEN state='queued' AND userId=? THEN 1 END) AS userQueued FROM company_jobs WHERE state IN ('queued','running')`)
+      .get(userId,userId) as CompanyTaskStatusResponse['usage'];
+    const tasks=this.db.prepare(`SELECT id AS jobId,projectId,COALESCE(runId,json_extract(payload,'$.runId')) AS runId,state,createdAt
+      FROM company_jobs WHERE userId=? AND state IN ('queued','running') ORDER BY createdAt,rowid`).all(userId) as CompanyTaskStatusResponse['tasks'];
+    return {limits:{...this.limits,perProject:1},usage,tasks};
   }
 
   claimNext(): CompanyJob | null {

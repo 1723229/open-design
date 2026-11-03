@@ -22,6 +22,8 @@ import { ExtensionsMarketplace } from '../../src/components/PluginsView';
 import { I18nProvider } from '../../src/i18n';
 
 const analyticsTrack = vi.hoisted(() => vi.fn());
+const company = vi.hoisted(() => ({ enabled: false }));
+vi.mock('../../src/company/CompanyProvider', () => ({ useCompany: () => company }));
 
 vi.mock('../../src/analytics/provider', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/analytics/provider')>();
@@ -53,6 +55,10 @@ const TEAM_CONTEXT = {
 };
 
 let workspaceContext: unknown = null;
+
+vi.mock('../../src/company/CompanyResourceContext', () => ({
+  useResourceWorkspaceContext: () => ({ context: workspaceContext, loading: false, refresh: vi.fn() }),
+}));
 
 // Spread the real module — see the note in ExtensionsMarketplace.team-scope.test.tsx.
 vi.mock('../../src/collab/useWorkspaceContext', async (importOriginal) => ({
@@ -123,6 +129,7 @@ function installSuccessStream(id: string): Response {
 }
 
 beforeEach(() => {
+  company.enabled = false;
   workspaceContext = null;
   skills = [USER_SKILL, OFFICIAL_SKILL];
   installResolvers = [];
@@ -322,6 +329,25 @@ describe('ExtensionsMarketplace card affordances', () => {
     expect(screen.queryByTestId('skill-detail')).toBeNull();
     expect(screen.queryByTestId('skill-details-modal')).toBeNull();
     expect(container.querySelector('.plugin-marketplace__item--skill')).toBeTruthy();
+  });
+
+  it('reuses the skill detail and Use action directly from the company skills catalogue', async () => {
+    company.enabled = true;
+    const onUseSkill = vi.fn();
+    const { container } = renderMarketplace({ onUseSkill });
+    fireEvent.click(screen.getByTestId('plugins-tab-installed'));
+    const card = await waitFor(() => {
+      const found = container.querySelector('.plugin-marketplace__item--skill');
+      expect(found).toBeTruthy();
+      return found as HTMLElement;
+    });
+    fireEvent.click(card);
+    await screen.findByTestId('skill-detail');
+    expect(screen.getByRole('heading', { level: 2, name: 'Heading' })).toBeTruthy();
+    fireEvent.click(screen.getByTestId('skill-detail-use'));
+    expect(onUseSkill).toHaveBeenCalledWith(expect.objectContaining({ id: USER_SKILL.id }));
+    expect(screen.queryByTestId('skill-detail')).toBeNull();
+    expect(container.querySelector('.plugin-marketplace__switch')).toBeNull();
   });
 
   it('#131 — a skill card runs the skill instead of offering nothing', async () => {

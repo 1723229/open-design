@@ -753,6 +753,7 @@ export async function createProject(
     id?: string;
     name: string;
     projectLocationId?: string;
+    companyTeamId?: string;
     skillId: string | null;
     skillCatalogScope?: LocalCatalogScope | null;
     designSystemId: string | null;
@@ -2799,7 +2800,7 @@ export async function applyPlugin(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(!options.pluginSource && options.workspaceContext
+          ...(options.workspaceContext && (!options.pluginSource || options.workspaceContext.identitySource === 'company')
             ? workspaceProjectHeaders(options.workspaceContext)
             : {}),
         },

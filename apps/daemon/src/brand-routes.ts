@@ -96,6 +96,8 @@ export interface BrandRoutesDeps {
    * `collab/created-project-workspace.ts`.
    */
   resolveCreatedProjectHome?: CreatedProjectWorkspaceResolver;
+  /** Alternate local ownership adapter; the default persists a cloud Workspace binding. */
+  bindCreatedProjectHome?: (context: WorkspaceResourceContext | null, projectId: string, now: number) => void;
   /** Skills root — the agent-driven kit page is rendered from the bundled
    *  `brand-extract` template under here. */
   skillsRoot: string;
@@ -193,6 +195,7 @@ export function registerBrandRoutes(app: Application, deps: BrandRoutesDeps): vo
     projectId: string,
     now: number,
   ): void {
+    if (deps.bindCreatedProjectHome) return deps.bindCreatedProjectHome(ctx, projectId, now);
     if (!ctx || ctx.memberStatus !== 'active') return;
     ensureWorkspaceProject(db, {
       projectId,

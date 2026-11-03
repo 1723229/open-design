@@ -128,6 +128,7 @@ export type CreateTab = 'prototype' | 'live-artifact' | 'deck' | 'template' | 'm
 export type MediaSurface = 'image' | 'video' | 'audio';
 
 export interface CreateInput {
+  companyTeamId?: string;
   name: string;
   skillId: string | null;
   /** UI-only intent marker; the public project contract still receives only the resolved skill id. */

@@ -65,7 +65,7 @@ export interface RegisterTeamResourceShareRoutesDeps {
     resourceId: string,
     scope: TeamResourceRequestScope,
     visibility: 'personal' | 'team',
-  ) => void;
+  ) => void | Promise<void>;
 }
 
 /**
@@ -152,7 +152,7 @@ export function registerTeamResourceShareRoutes(
       // freshMs, or worse, the client's slower background poll once SSE
       // lowers its cadence.
       invalidateListTeam(scope);
-      deps.onMutationCommitted?.(id, scope, 'team');
+      await deps.onMutationCommitted?.(id, scope, 'team');
       res.json({ shared: true, version: result.version });
     } catch (error) {
       if (error instanceof TeamResourceShareForbiddenError) {
@@ -173,7 +173,7 @@ export function registerTeamResourceShareRoutes(
       const unshared = await share.unshare(id, scope);
       if (unshared) {
         invalidateListTeam(scope);
-        deps.onMutationCommitted?.(id, scope, 'personal');
+        await deps.onMutationCommitted?.(id, scope, 'personal');
       }
       res.json({ unshared });
     } catch (error) {

@@ -1,4 +1,3 @@
-import { useCompany } from '../../company/CompanyProvider';
 import { useEffect, useState } from 'react';
 import type { ProjectShareHistoryResponse, WorkspaceCollabContext } from '@open-design/contracts';
 import { currentWorkspaceAccountGeneration, workspaceAccountScopedCacheKey, workspaceProjectHeaders } from '../../collab/workspace-identity';
@@ -21,12 +20,10 @@ export function isProjectShareHistory(value: unknown, projectId: string): value 
 export type ProjectShareReadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export function useProjectShareHistoryState(projectId: string | undefined, context: WorkspaceCollabContext | null | undefined, publicationKey: string) {
-  const company = useCompany();
   const generation = currentWorkspaceAccountGeneration();
   const scope = JSON.stringify([projectId, workspaceAccountScopedCacheKey(context), publicationKey]);
   const [result, setResult] = useState<{ scope: string; history: ProjectShareHistoryResponse | null } | null>(null);
   useEffect(() => {
-    if (company.enabled) return;
     let disposed = false;
     let attempt = 0;
     let controller: AbortController | undefined;
@@ -66,10 +63,10 @@ export function useProjectShareHistoryState(projectId: string | undefined, conte
       window.removeEventListener('focus', refresh);
       window.removeEventListener(PROJECT_SHARE_HISTORY_CHANGED_EVENT, refreshChangedProject);
     };
-  }, [projectId, context, generation, scope, company.enabled]);
+  }, [projectId, context, generation, scope]);
   const current = result?.scope === scope ? result : null;
-  const status: ProjectShareReadStatus = company.enabled || !projectId ? 'idle' : !current ? 'loading' : current.history ? 'ready' : 'error';
-  return { history: company.enabled ? null : current?.history ?? null, status };
+  const status: ProjectShareReadStatus = !projectId ? 'idle' : !current ? 'loading' : current.history ? 'ready' : 'error';
+  return { history: current?.history ?? null, status };
 }
 
 export function useProjectShareHistory(projectId: string | undefined, context: WorkspaceCollabContext | null | undefined, publicationKey: string) {

@@ -15,6 +15,7 @@ import type {
   SkillSummary,
   WorkspaceCollabContext,
 } from '@open-design/contracts';
+import { useCompany } from '../company/CompanyProvider';
 import { useI18n, useT } from '../i18n';
 import { LIBRARY_UI_VISIBLE } from '../features/libraryUi';
 import { ComposerPluginPreview } from './ComposerPluginPreview';
@@ -351,6 +352,7 @@ export function ComposerPlusMenu({
   openRequest,
 }: ComposerPlusMenuProps) {
   const t = useT();
+  const company = useCompany();
   const { locale } = useI18n();
   const [open, setOpen] = useState(false);
   const [submenu, setSubmenu] = useState<PlusMenuSubmenu | null>(null);
@@ -468,7 +470,9 @@ export function ComposerPlusMenu({
     cancelSubmenuClose();
     onOpen?.();
     setOpen(true);
-    if (openRequest.submenu) openSubmenu(openRequest.submenu, null);
+    if (openRequest.submenu && !(company.enabled && ['plugins', 'connectors'].includes(openRequest.submenu))) {
+      openSubmenu(openRequest.submenu, null);
+    }
     // openSubmenu / cancelSubmenuClose are hoisted per-render function
     // declarations; the nonce ref is the real change detector here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -674,7 +678,7 @@ export function ComposerPlusMenu({
             <span>{t('chat.attachAria')}</span>
           </button>
           {!onPickWorkingDir ? contextActions : null}
-          {hidePluginsRow || !onPickPlugin ? null : (
+          {company.enabled || hidePluginsRow || !onPickPlugin ? null : (
           <PlusSubmenuRow
             label={t('entry.navPlugins')}
             icon="sparkles"
@@ -781,7 +785,7 @@ export function ComposerPlusMenu({
               <span>{t('chat.importFigma')}</span>
             </button>
           ) : null}
-          {onPickConnector ? (
+          {!company.enabled && onPickConnector ? (
           <PlusSubmenuRow
             label={t('connectors.title')}
             icon="link"

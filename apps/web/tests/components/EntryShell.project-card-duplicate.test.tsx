@@ -17,6 +17,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EntryShell } from '../../src/components/EntryShell';
+import * as companySession from '../../src/company/CompanyProvider';
 import { I18nProvider } from '../../src/i18n';
 import type { AgentInfo, AppConfig, Project } from '../../src/types';
 import {
@@ -150,6 +151,7 @@ afterEach(() => {
   resetWorkspaceContextCache();
   resetTeamProjectsCache();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('OPEND-2686 — project card menu offers Duplicate project', () => {
@@ -161,6 +163,17 @@ describe('OPEND-2686 — project card menu offers Duplicate project', () => {
     createdAt: 1,
     updatedAt: 1,
   };
+
+  it('offers the original multi-select to a company user who can manage a project without a cloud workspace', async () => {
+    vi.spyOn(companySession, 'useCompany').mockReturnValue({
+      enabled: true, user: { id: 'local-user', username: 'Local user', role: 'member', mustChangePassword: false },
+      isMember: true, logout: async () => {},
+      presentation: { showAgentIdentity: false, hiddenSettingsSections: [] },
+    });
+    globalThis.fetch = vi.fn(async () => jsonResponse({ context: null, projects: [], plugins: [] })) as typeof fetch;
+    renderAt('/drafts', { projects: [{ ...localProject, companyAccess: { canManage: true, canWrite: true, canComment: true, ownerUserId: 'local-user' } }] });
+    expect(await screen.findByRole('button', { name: 'Multi-select' })).toBeVisible();
+  });
 
   it('lists Rename / Duplicate project / Delete on a Personal projects card and hands the id to the shell', async () => {
     globalThis.fetch = vi.fn(async () => jsonResponse({ context: null, projects: [], plugins: [] })) as typeof fetch;

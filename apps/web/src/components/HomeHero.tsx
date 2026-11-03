@@ -7,6 +7,7 @@
 // composed with the recent-projects strip and plugins section
 // without owning their data lifecycles.
 
+import { useCompany } from '../company/CompanyProvider';
 import {
   forwardRef,
   useEffect,
@@ -443,6 +444,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
   // to change how the composer itself behaves.
   const isDock = variant === 'dock';
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const company = useCompany();
   const [mentionTab, setMentionTab] = useState<HomeMentionTab>('all');
   const [dragActive, setDragActive] = useState(false);
   // Border beam on the prompt card (styles/home/composer-beam.css). Mirrors
@@ -655,10 +657,10 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
   );
   const pluginMatches = useMemo(
     () =>
-      mentionActive
+      mentionActive && !company.enabled
         ? pluginOptions.filter((plugin) => pluginMatchesQuery(plugin, mentionQuery, locale))
         : [],
-    [locale, mentionActive, mentionQuery, pluginOptions],
+    [company.enabled, locale, mentionActive, mentionQuery, pluginOptions],
   );
   const skillMatches = useMemo(
     () =>
@@ -676,10 +678,10 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
   );
   const connectorMatches = useMemo(
     () =>
-      mentionActive
+      mentionActive && !company.enabled
         ? connectorOptions.filter((connector) => connectorMatchesQuery(connector, mentionQuery)).slice(0, 6)
         : [],
-    [connectorOptions, mentionActive, mentionQuery],
+    [company.enabled, connectorOptions, mentionActive, mentionQuery],
   );
   const pickerOpen = active && mentionActive;
   const tabs: Array<{ id: HomeMentionTab; label: string; count: number }> = [
@@ -2059,7 +2061,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
             data-testid="home-hero-plugin-picker"
           >
             <div className="home-hero__mention-tabs" role="tablist" aria-label={t('homeHero.contextSurfaces')}>
-              {tabs.map((item) => (
+              {tabs.filter(item => !company.enabled || !['plugins', 'connectors'].includes(item.id)).map((item) => (
                 <button
                   key={item.id}
                   type="button"
@@ -2086,7 +2088,9 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
                   {mentionQuery ? (
                     <>{t('homeHero.noResults', { query: mentionQuery })}</>
                   ) : (
-                    <>{t('homeHero.searchPrompt')}</>
+                    <>{company.enabled
+                      ? tabs.filter(item => !['all', 'plugins', 'connectors'].includes(item.id)).map(item => item.label).join(' · ')
+                      : t('homeHero.searchPrompt')}</>
                   )}
                 </div>
               ) : null}

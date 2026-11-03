@@ -7,6 +7,9 @@ import { IntegrationsView } from '../../src/components/IntegrationsView';
 import { I18nProvider } from '../../src/i18n';
 import type { AppConfig } from '../../src/types';
 
+const company = vi.hoisted(() => ({enabled:false,isMember:false}));
+vi.mock('../../src/company/CompanyProvider', () => ({useCompany:()=>company}));
+
 vi.mock('../../src/analytics/provider', () => ({
   useAnalytics: () => ({
     track: vi.fn(),
@@ -44,6 +47,7 @@ const baseConfig: AppConfig = {
 
 describe('IntegrationsView config reconciliation', () => {
   beforeEach(() => {
+    company.enabled=false;company.isMember=false;
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/api/connectors')) {
@@ -54,6 +58,15 @@ describe('IntegrationsView config reconciliation', () => {
       }
       throw new Error(`Unexpected IntegrationsView request: ${url}`);
     }));
+  });
+
+  it.each(['mcp','connectors','use-everywhere'] as const)('keeps only MCP and Skills tabs in company mode, including hidden initial tab %s', async initialTab => {
+    company.enabled=true;
+    vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL)=>Response.json(String(input)==='/api/mcp/servers'?{servers:[],templates:[]}:{agents:[]})));
+    render(<I18nProvider initial="en"><IntegrationsView config={baseConfig} initialTab={initialTab} onConfigPersist={vi.fn()} onPersistComposioKey={vi.fn()}/></I18nProvider>);
+    expect(screen.getAllByRole('tab').map(tab=>tab.getAttribute('data-testid'))).toEqual(['integrations-tab-mcp','integrations-tab-skills']);
+    expect(screen.getByTestId('integrations-tab-mcp').getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByRole('button',{name:/Add server/i})).toBeTruthy();
   });
 
   afterEach(() => {

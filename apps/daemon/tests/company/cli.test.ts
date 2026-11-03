@@ -7,7 +7,29 @@ import { tmpdir } from 'node:os';
 import { createCompanyCliFetch, createCompanyTaskFetch, runCompanyCli } from '../../src/company/cli.js';
 
 const cleanup: Array<() => void | Promise<void>> = [];
+
+it('moves a design through the authenticated ownership endpoint using a JSON input file',async()=>{
+  const directory=mkdtempSync(path.join(tmpdir(),'od-move-cli-'));
+  cleanup.push(()=>rmSync(directory,{recursive:true,force:true}));
+  const input=path.join(directory,'move.json');writeFileSync(input,JSON.stringify({companyTeamId:'team-a'}));
+  const app=express();app.use(express.json());
+  app.get('/api/company/session',(_req,res)=>res.json({enabled:true,user:{id:'owner'},csrfToken:'csrf'}));
+  app.post('/api/company/projects/design/move',(req,res)=>res.json({projectId:'design',companyTeamId:req.body.companyTeamId}));
+  const base=await endpoint(app),output:string[]=[];
+  expect(await runCompanyCli(['project','move','design','--prompt-file',input,'--daemon-url',base,'--json'],{env:{OD_COMPANY_SESSION:'a'.repeat(43)},stdout:value=>output.push(value)})).toBe(0);
+  expect(JSON.parse(output.join(''))).toEqual({projectId:'design',companyTeamId:'team-a'});
+});
 afterEach(async () => { for (const dispose of cleanup.splice(0).reverse()) await dispose(); });
+it('reads own task capacity through the same authenticated endpoint as the web',async()=>{
+  const app=express();
+  app.get('/api/company/tasks',(req,res)=>{
+    expect(req.headers.cookie).toContain('od_company_session=');
+    res.json({limits:{global:12,perUser:3,perProject:1},usage:{globalRunning:4,userRunning:1,userQueued:0},tasks:[]});
+  });
+  const base=await endpoint(app),output:string[]=[];
+  expect(await runCompanyCli(['tasks','--daemon-url',base,'--json'],{env:{OD_COMPANY_SESSION:'a'.repeat(43)},stdout:value=>output.push(value)})).toBe(0);
+  expect(JSON.parse(output.join(''))).toMatchObject({usage:{userRunning:1},limits:{perUser:3}});
+});
 async function endpoint(handler: express.Express) {
   const server = http.createServer(handler);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));

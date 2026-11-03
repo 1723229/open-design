@@ -2651,7 +2651,7 @@ export function FileWorkspace({
     const generation = currentWorkspaceAccountGeneration();
     let activeCount: number | null;
     try {
-      activeCount = await activeFileSharesBeforeDelete(projectId, filePaths, workspaceContext);
+      activeCount = await activeFileSharesBeforeDelete(projectId, filePaths, workspaceContext, company.enabled);
     } catch {
       alert(t('ds.actionFailed'));
       return false;

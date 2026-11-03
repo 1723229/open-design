@@ -24,6 +24,8 @@ export interface CommentAuthorityComment {
 }
 
 export interface CommentAuthorityContext {
+  canComment?: boolean;
+  canSendToAgent?: boolean;
   /** The viewer's presence identity; null off-team. */
   viewerMemberId: string | null;
   /** Whether cloud collaboration is active for this project. */
@@ -92,7 +94,7 @@ export function canEditComment(
   comment: CommentAuthorityComment | null | undefined,
   context: CommentAuthorityContext,
 ): boolean {
-  return commentAuthoredByViewer(comment, context);
+  return context.canComment !== false && commentAuthoredByViewer(comment, context);
 }
 
 /** The author OR the project owner may delete. */
@@ -100,7 +102,7 @@ export function canDeleteComment(
   comment: CommentAuthorityComment | null | undefined,
   context: CommentAuthorityContext,
 ): boolean {
-  return commentAuthoredByViewer(comment, context) || viewerIsProjectOwner(context);
+  return context.canComment !== false && (commentAuthoredByViewer(comment, context) || viewerIsProjectOwner(context));
 }
 
 /** The author OR the project owner may send to the agent. */
@@ -108,5 +110,5 @@ export function canSendCommentToAgent(
   comment: CommentAuthorityComment | null | undefined,
   context: CommentAuthorityContext,
 ): boolean {
-  return commentAuthoredByViewer(comment, context) || viewerIsProjectOwner(context);
+  return context.canSendToAgent ?? (commentAuthoredByViewer(comment, context) || viewerIsProjectOwner(context));
 }

@@ -492,6 +492,18 @@ describe('applyPlugin', () => {
     ]);
   });
 
+  it('retains verified company scope when applying an exact local plugin source', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => Response.json({ ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    const context: WorkspaceCollabContext = { ...teamWorkspaceContext({workspaceId:'company-team',workspaceMemberId:'company-user'}), identitySource:'company' };
+    await applyPlugin('company-plugin', {pluginSource:'/bundled/company-plugin',workspaceContext:context});
+    const [url,init]=fetchMock.mock.calls[0]!;
+    expect(url).toBe('/api/plugins/company-plugin/apply-local');
+    expect(new Headers(init?.headers).get('x-nexus-resource-workspace-id')).toBe('company-team');
+    expect(new Headers(init?.headers).get('x-nexus-resource-member-id')).toBe('company-user');
+    expect(new Headers(init?.headers).has('x-od-workspace-id')).toBe(false);
+  });
+
   it('does not fall back when the new local resolver rejects a source', async () => {
     const fetchMock = vi.fn<typeof fetch>(async () => new Response(
       JSON.stringify({ error: 'plugin not found' }),

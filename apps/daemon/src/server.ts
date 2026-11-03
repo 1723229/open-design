@@ -526,7 +526,7 @@ import { renderDesignSystemShowcase } from './design-systems/showcase.js';
 import { createChatRunService } from './runtimes/runs.js';
 import { reapLeftoverAgentProcesses, spawnAgentProcess } from './runtimes/agent-process.js';
 import { initializeCompany } from './company/routes.js';
-import { createCompanyModelAdmissionHolds, installCompanyHttpPolicy } from './company/http-policy.js';
+import { createCompanyDiagnosticsAccess, createCompanyModelAdmissionHolds, installCompanyHttpPolicy } from './company/http-policy.js';
 import { CompanyModelSettings } from './company/model-settings.js';
 import { createNativeCompanyModelProbe } from './company/native-model-probe.js';
 import { registerCompanyModelRoutes } from './company/model-routes.js';
@@ -534,6 +534,9 @@ import type { CompanyModelRoute } from '@open-design/contracts';
 import { resolveCompanyInputPaths } from './company/input-paths.js';
 import { companyProjectEnvironment, companyProjectHome } from './company/container-execution.js';
 import { CompanyJobQueue } from './company/job-queue.js';
+import { CompanyResources } from './company/resources.js';
+import { companyResourceAuthority, registerCompanyResourceRoutes } from './company/resource-routes.js';
+import { registerCompanyBrandRoutes } from './company/brand-routes.js';
 import { CompanyDispatcher } from './company/dispatcher.js';
 import { cancelCompanyJob } from './company/agent-bridge.js';
 import { registerCompanyModelLease, revokeCompanyModelLease } from './company/model-proxy.js';
@@ -3443,6 +3446,14 @@ export async function startServer({
       );
       const memberId = binding?.createdByWorkspaceMemberId?.trim();
       if (!memberId) return;
+      if(company.enabled) {
+        const owner=company.store.getUser(memberId);
+        if(!owner) throw new Error('Design-system owner is unavailable');
+        company.registerProjectOwner(projectId,owner);
+        const project=getProject(db,projectId);
+        updateProject(db,projectId,{metadata:{...project?.metadata,localCatalogScopes:{designSystem:{workspaceId,workspaceMemberId:memberId}}}});
+        return;
+      }
       ensureWorkspaceProject(db, {
         projectId,
         workspaceId,
@@ -3613,6 +3624,12 @@ export async function startServer({
     dataRoot: RUNTIME_DATA_DIR,
     database: db,
     resolveRunProjectId: (id) => design.runs.get(id)?.projectId ?? null,
+    projectIsBusy: (id) => companyJobQueue?.list().some(job => job.projectId === id && ['queued','running'].includes(job.state)) ?? false,
+    taskStatus: user=>{
+      if(!companyJobQueue) throw new Error('Task queue is unavailable');
+      const status=companyJobQueue.status(user.id);
+      return {...status,tasks:status.tasks.filter(task=>company.store.canAccess(user,task.projectId)).map(task=>({...task,projectName:getProject(db,task.projectId)?.name ?? task.projectId}))};
+    },
     resolvePreviewOwner: (req) => {
       if (!['GET','HEAD'].includes(req.method)) return null;
       const preview = parseProjectPreviewAssetPath(req.path.replace(/^\/api/u,''));
@@ -3632,6 +3649,14 @@ export async function startServer({
     },
   });
   if (process.env.OD_COMPANY_MODE === '1' && !company.enabled) throw new Error('Company deployment requires enabled company authentication');
+  const companyResources=company.enabled ? new CompanyResources(company.store,RUNTIME_DATA_DIR) : null;
+  const localResourceScope=(req,projectId,kind)=>{
+    if(!companyResources) return null;
+    const actor=company.getUser(req);
+    if(!actor) throw new Error('Authenticated resource selection required');
+    const context=companyResources.selectionContext(actor,projectId,kind);
+    return {workspaceId:context.workspaceId,workspaceMemberId:context.workspaceMemberId};
+  };
   if (company.enabled) {
     companyJobQueue = new CompanyJobQueue(db, {
       global: Number(process.env.OD_COMPANY_MAX_JOBS ?? 12),
@@ -3660,6 +3685,8 @@ export async function startServer({
   }
   app.use(company.middleware);
   app.use(company.router);
+  if(companyResources) registerCompanyResourceRoutes(app,{company,resources:companyResources});
+  if(companyResources) registerCompanyBrandRoutes(app,{company,resources:companyResources,brandsRoot:BRANDS_DIR});
   installCompanyHttpPolicy(app, {
     company,
     readConfig: () => readAppConfig(RUNTIME_DATA_DIR),
@@ -3667,7 +3694,7 @@ export async function startServer({
     models: companyModels,
     holdModelRoute: companyModelAdmissions.holdModelRoute,
     resolveProjectRoot: (id) => resolveProjectDir(PROJECTS_DIR, id, getProject(db, id)?.metadata),
-    projectIsExecuting: (id) => companyJobQueue?.list().some((job) => job.projectId === id && job.state === 'running') ?? false,
+    projectIsExecuting: (id) => companyJobQueue?.list().some((job) => job.projectId === id && ['queued','running'].includes(job.state)) ?? false,
   });
   if (companyModels) registerCompanyModelRoutes(app, {
     company,
@@ -3704,6 +3731,10 @@ export async function startServer({
     PLUGIN_REGISTRY_ROOTS,
     PLUGIN_LOCKFILE_PATH,
     PLUGIN_UPLOAD_MAX_BYTES,
+    allowReplacePlugin:(scope,id)=>allowScopedPluginReplace(scope,id),
+    claimPlugin:(scope,id)=>ensureWorkspaceResource(db,'plugin',scope.workspaceId,id,{
+      visibility:'personal',resourceState:'active',createdByWorkspaceMemberId:scope.workspaceMemberId,updatedByWorkspaceMemberId:scope.workspaceMemberId,
+    }),
   });
   const mediaTaskStore = createMediaTaskStore(db, {
     isRunActive: (runId) => toolTokenRegistry.activeRunTokenCount(runId) > 0,
@@ -4091,6 +4122,7 @@ export async function startServer({
     req: any;
     requireTeam?: boolean;
   }, options: { fresh?: boolean; backgroundFresh?: boolean } = {}) => {
+    if(companyResources) return companyResourceAuthority(input.req,company,companyResources);
     if (process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela') {
       let fetchDirectory = fetchFreshMutationWorkspaceDirectory;
       if (options.fresh === false) {
@@ -7330,6 +7362,10 @@ export async function startServer({
   const teamResourceScopeStillAuthorized = async (
     scope: TeamResourceRequestScope,
   ): Promise<boolean> => {
+    if(companyResources) {
+      try { companyResources.context({id:scope.principal.memberId},scope.principal.teamId);return true; }
+      catch {return false;}
+    }
     const refreshed = await resolveTeamResourceScopeForWorkspaceId(
       scope.principal.teamId,
     );
@@ -7345,6 +7381,7 @@ export async function startServer({
     resource: TeamResourceShareRecord,
     scope: TeamResourceRequestScope,
   ): Promise<boolean> => {
+    if(companyResources) return companyResources.publications(kind,scope).some(item=>item.id===resource.id && item.versionId===resource.versionId);
     const { runVelaResourceCommand } = await import(
       './collab/vela-cli-resource-adapter.js'
     );
@@ -7851,21 +7888,24 @@ export async function startServer({
   const teamResourceMaterializationGate = new ConcurrencyGate(
     COLLAB_VELA_FANOUT_CONCURRENCY,
   );
-  const teamResourcePullBatcher = createVelaResourcePullBatcher();
+  const teamResourcePullBatcher = companyResources ? {pull:request=>companyResources.pull(request)} : createVelaResourcePullBatcher();
   const cachedTeamResourceList = (
     share: TeamResourceShareService,
     sync?: (
       resource: TeamResourceShareRecord,
       scope: TeamResourceRequestScope,
     ) => Promise<void>,
-  ) =>
-    createTeamResourceListCache({
+  ) => {
+    const listing=createTeamResourceListCache({
       share,
       ...(sync ? { sync } : {}),
       gate: teamResourceMaterializationGate,
       invalidateSharedCommand: (workspaceId) =>
         sharedTeamResourcesCommand.invalidate(workspaceId),
     });
+    // Local SQLite reads need no remote SWR window; revocations apply to every member immediately.
+    return companyResources ? Object.assign(listing.authoritative,{authoritative:listing.authoritative,invalidate:listing.invalidate}) : listing;
+  };
   const runTeamResourceCommand = async (
     args: string[],
     workspaceId?: string,
@@ -7882,7 +7922,14 @@ export async function startServer({
     const { runVelaResourceCommand } = await import('./collab/vela-cli-resource-adapter.js');
     return runVelaResourceCommand(args, workspaceId);
   };
-  const designSystemsTeamResourceShare = createTeamResourceShareService({
+  const createResourceShare=options=>companyResources ? companyResources.shareService(options) : createTeamResourceShareService(options);
+  const notifyCompanyResourceMutation=async (kind,resourceId,scope)=>{
+    if(!companyResources) return;
+    const resources=companyResources.publications(kind,scope).map(resource=>({resourceId:resource.id,versionId:resource.versionId}));
+    await reconcileTeamResourceKind(kind,scope,resources);
+    emitWorkspaceEvent(scope.principal.teamId,{type:'team-resources-changed',resourceKind:kind,resourceId,at:Date.now()});
+  };
+  const designSystemsTeamResourceShare = createResourceShare({
     kind: 'design_system',
     idPrefix: 'ds',
     resolveDir: (id) => resolveUserDesignSystemShareDirectory(db, id),
@@ -7972,9 +8019,12 @@ export async function startServer({
     syncSharedResource: syncSharedTeamDesignSystem,
     share: designSystemsTeamShare,
     listTeam: designSystemsTeamList,
-    onMutationCommitted: notifyDesignSystemLinkedMutation,
+    onMutationCommitted: async (id,scope,visibility)=>{
+      await notifyCompanyResourceMutation('design_system',id,scope);
+      notifyDesignSystemLinkedMutation(id,scope,visibility);
+    },
   });
-  const pluginsTeamShare = createTeamResourceShareService({
+  const pluginsTeamShare = createResourceShare({
     kind: 'plugin',
     idPrefix: 'plugin',
     resolveDir: (id) => {
@@ -8013,8 +8063,9 @@ export async function startServer({
     syncSharedResource: syncSharedTeamPlugin,
     share: pluginsTeamShare,
     listTeam: pluginsTeamList,
+    onMutationCommitted: (id,scope)=>notifyCompanyResourceMutation('plugin',id,scope),
   });
-  const skillsTeamShare = createTeamResourceShareService({
+  const skillsTeamShare = createResourceShare({
     kind: 'skill',
     idPrefix: 'skill',
     resolveDir: async (id) => {
@@ -8053,6 +8104,7 @@ export async function startServer({
     syncSharedResource: syncSharedTeamSkill,
     share: skillsTeamShare,
     listTeam: skillsTeamList,
+    onMutationCommitted: (id,scope)=>notifyCompanyResourceMutation('skill',id,scope),
   });
   const teamResourceListByKind = {
     design_system: designSystemsTeamList,
@@ -8998,11 +9050,9 @@ export async function startServer({
     (_req, res) => res.json(amrTerminalReportOutbox.diagnostics()),
   );
 
-  // Gate the diagnostics export behind requireLocalDaemonRequest so it stays
-  // unreachable when daemon binds to a non-loopback address (Tailscale,
-  // 0.0.0.0, etc.). The bundle contains daemon/web/desktop logs, host
-  // metadata, and crash reports — same threat tier as connector / live-
-  // artifact endpoints, which all use the same guard.
+  // Local diagnostics keep the loopback guard. Company deployments require
+  // their authenticated administrator for the same privileged export.
+  const requireDiagnosticsRequest = createCompanyDiagnosticsAccess(company, requireLocalDaemonRequest);
   // Renderer-side chat-scroll evidence, pushed just before an export is
   // requested. Same guard and same threat tier as the export itself: the body
   // carries the chat log's DOM. Not a user-facing capability — it is the
@@ -9015,13 +9065,13 @@ export async function startServer({
   // here as well would only make it look like this line is what sizes the route.
   app.post(
     CHAT_SCROLL_FORENSICS_PATH,
-    requireLocalDaemonRequest,
+    requireDiagnosticsRequest,
     chatScrollForensicsHandler,
   );
 
   app.get(
     DIAGNOSTICS_EXPORT_PATH,
-    requireLocalDaemonRequest,
+    requireDiagnosticsRequest,
     createDiagnosticsExportHandler({
       runtime,
       projectRoot: PROJECT_ROOT,
@@ -9066,7 +9116,16 @@ export async function startServer({
   });
   const authorizeProjectRequest = company.enabled
     ? async (req, res, projectId, options) => {
-        if (company.canAccess(company.getUser(req), projectId, options.mode === 'write')) return true;
+        const actor=company.getUser(req);
+        if(options.capability==='comment' && actor && company.store.canComment(actor,projectId)) {
+          const binding=getWorkspaceProjectByProjectId(db,projectId);
+          if(binding?.workspaceId) {
+            const workspaceId=String(req.get('x-od-workspace-id') ?? req.get('x-nexus-resource-workspace-id') ?? '');
+            const memberId=String(req.get('x-od-workspace-member-id') ?? req.get('x-nexus-resource-member-id') ?? '');
+            if(workspaceId===binding.workspaceId && memberId===actor.id) return true;
+          }
+        }
+        if (company.canAccess(actor, projectId, options.mode === 'write')) return true;
         sendApiError(res, 403, 'PROJECT_ACCESS_DENIED', '无权访问此项目');
         return false;
       }
@@ -9610,6 +9669,13 @@ export async function startServer({
       requireWorkspaceAuthority: Boolean(velaCliTeamProjectCatalog),
     }),
     resolveWorkspaceContext: resolveProjectCommentWorkspaceContext,
+    ...(companyResources?{resolveLocalResourceScope:localResourceScope}:{}),
+    resolveLocalCommentIdentity: (req,projectId) => {
+      const user=company.getUser(req);
+      return company.enabled && user && company.canAccess(user,projectId) ? {
+        memberId:user.id,displayName:user.displayName ?? user.username,canManage:company.store.canManage(user,projectId),
+      } : null;
+    },
     resolveCurrentAuthorDisplayName: () => {
       const user = readVelaControlApiContext(process.env, configuredAmrEnv())?.user;
       return user?.name?.trim() || user?.email?.trim() || null;
@@ -9902,7 +9968,13 @@ export async function startServer({
     generationJobs: designSystemGenerationJobs,
   });
   registerBrandRoutes(app, {
-    resolveCreatedProjectHome,
+    // Company ownership is claimed by the brand adapter, independently of Vela Workspaces.
+    ...(companyResources ? {bindCreatedProjectHome: () => {}} : {}),
+    resolveCreatedProjectHome: companyResources ? async req=>{
+      const resolution=companyResourceAuthority(req,company,companyResources);
+      if(!resolution.ok) throw Object.assign(new Error(resolution.message),{status:resolution.status,code:resolution.code});
+      return resolution.context;
+    } : resolveCreatedProjectHome,
     brandsRoot: BRANDS_DIR,
     userDesignSystemsRoot: USER_DESIGN_SYSTEMS_DIR,
     resolveDesignSystemWorkspaceId: resolveDesignSystemWorkspaceScope,
@@ -10149,6 +10221,7 @@ export async function startServer({
   };
 
   const pluginRouteHelpers = {
+    requireScopedLocalSelection:company.enabled,
     PLUGIN_PREVIEWS_DIR,
     applyBakedPreviews,
     assembleExample,
@@ -10653,6 +10726,7 @@ export async function startServer({
     platformHintSignal,
     devicePlatformSignal = null,
     frozenSkillPackage,
+    companyActorId: requestedCompanyActorId,
   }) => {
     const project =
       typeof projectId === 'string' && projectId
@@ -10671,7 +10745,13 @@ export async function startServer({
         ? projectWorkspaceBinding.createdByWorkspaceMemberId.trim()
         : '';
     const metadata = project?.metadata;
+    const companyActorId=requestedCompanyActorId ?? (companyResources && projectId ? companyJobQueue?.list().find(job=>job.projectId===projectId && job.state==='running')?.userId : null);
+    if(companyResources && projectId && !companyActorId) throw new Error('Company resource composition requires an authenticated task identity');
     const localCatalogScope = (value) => {
+      if(companyResources && companyActorId) {
+        const context=companyResources.selectionContext({id:companyActorId},projectId,'designSystem');
+        return {workspaceId:context.workspaceId,workspaceMemberId:context.workspaceMemberId};
+      }
       const workspaceId = typeof value?.workspaceId === 'string'
         ? value.workspaceId.trim()
         : '';
@@ -10789,7 +10869,10 @@ export async function startServer({
         : null;
     // Shared with OD Next's frozen-package capture so a Skill this prompt can
     // resolve is a Skill that route can freeze, and vice versa.
-    const skillResourceScope = resolveSkillCatalogScope({
+    const skillResourceScope = companyResources && companyActorId ? (()=>{
+      const context=companyResources.selectionContext({id:companyActorId},projectId,'skill');
+      return {workspaceId:context.workspaceId,workspaceMemberId:context.workspaceMemberId};
+    })() : resolveSkillCatalogScope({
       metadata,
       workspaceBinding: projectResourceScope,
     });
@@ -12360,6 +12443,7 @@ export async function startServer({
         freeformDeckSignal: intentSignals.deck,
         mediaHintSignal: intentSignals.media,
         platformHintSignal: intentSignals.platform,
+        companyActorId: chatBody.companyActorId,
         frozenSkillPackage: undefined,
       });
     const {
@@ -18462,7 +18546,9 @@ export async function startServer({
   });
 
   registerRunRoutes(app, {
+    ...(company.enabled ? {companyActorId:(req)=>company.getUser(req)?.id ?? null} : {}),
     db,
+    ...(companyResources?{resolveRunSkillCatalogScope:(req,projectId)=>localResourceScope(req,projectId,'skill')}:{}),
     design,
     runNotices,
     resources: { listAllSkillLikeEntries },

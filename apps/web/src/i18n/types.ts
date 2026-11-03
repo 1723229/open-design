@@ -30,6 +30,24 @@ export const LOCALE_LABEL: Record<Locale, string> = {
 // flat (not deeply nested) so missing-key TS errors point straight at the
 // offending string instead of a generic object mismatch.
 export interface Dict {
+  'company.tasks': string;
+  'company.taskUserUsage': string;
+  'company.taskGlobalUsage': string;
+  'company.taskProjectLimit': string;
+  'company.noActiveTasks': string;
+  'company.teams': string;
+  'company.personalSpace': string;
+  'company.moveToTeamDescription': string;
+  'company.moveToPersonalDescription': string;
+  'company.teamMembers': string;
+  'company.createTeam': string;
+  'company.teamName': string;
+  'company.archiveTeam': string;
+  'company.restoreTeam': string;
+  'company.inheritedTeam': string;
+  'company.manageAtSource': string;
+  'company.teamUnavailable': string;
+  'company.teamReadOnly': string;
 
   'company.models.effective': string;
   'company.models.inUse': string;

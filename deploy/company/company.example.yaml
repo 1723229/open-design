@@ -24,3 +24,12 @@ server:
 presentation:
   show_agent_identity: false
   hidden_settings_sections: [labs, integrations]
+teams:
+  enabled: false
+integrations:
+  enabled: false
+  clients: []
+  # When enabled, configure each client with:
+  # - id: cbrain
+  #   authorize_url: http://nexus.internal/api/v1/integrations/nexus-design/authorize
+  #   secret: ${NEXUS_INTEGRATION_SECRET}

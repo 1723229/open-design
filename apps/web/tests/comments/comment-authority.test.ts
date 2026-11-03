@@ -63,6 +63,16 @@ const otherMemberComment: CommentAuthorityComment = {
   authorMemberId: 'member-someone-else',
 };
 
+it('separates local review permission from applying any selected team feedback with AI',()=>{
+  const reviewer={...TEAM_MEMBER,canComment:true,canSendToAgent:false};
+  expect(canEditComment(myComment,reviewer)).toBe(true);
+  expect(canDeleteComment(otherMemberComment,reviewer)).toBe(false);
+  expect(canSendCommentToAgent(myComment,reviewer)).toBe(false);
+  expect(canSendCommentToAgent(otherMemberComment,{...reviewer,canSendToAgent:true})).toBe(true);
+  expect(canEditComment(myComment,{...reviewer,canComment:false})).toBe(false);
+  expect(canDeleteComment(myComment,{...reviewer,canComment:false})).toBe(false);
+});
+
 describe('评论归属 · 今天已经是绿的（回归网，修缺陷时不许弄红）', () => {
   it('创建流程里的草稿属于当前查看者', () => {
     expect(commentAuthoredByViewer(null, TEAM_MEMBER)).toBe(true);

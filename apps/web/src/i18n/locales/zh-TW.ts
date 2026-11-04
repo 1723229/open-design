@@ -1,6 +1,12 @@
 import type { Dict } from "../types";
 
 export const zhTW: Dict = {
+  'newproj.moreOptions': 'More options',
+  'newproj.optionsHint': 'Optional. Defaults create a responsive web design with finished visuals.',
+  'newproj.designSystemHint': 'Sets the colors, fonts and visual style. Keep the default if unsure.',
+  'newproj.managedFooter': 'Saved on the server. Personal designs are private; team designs are shared with team members.',
+  'newproj.createError': 'Could not create project. Please try again.',
+  'newproj.creating': 'Creating project…',
   "company.tasks": "任务",
   "company.taskUserUsage": "正在运行 {running}/{limit} · 排队 {queued} 项",
   "company.taskGlobalUsage": "平台运行中 {running}/{limit}",

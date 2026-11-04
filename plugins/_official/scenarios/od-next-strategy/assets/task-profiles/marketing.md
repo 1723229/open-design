@@ -187,7 +187,7 @@ Meet the following in one pass, while writing the source:
   no mechanical scaling.
 - Print collateral builds its canvas at physical dimensions with bleed, and
   the print parameters go into the delivery notes; never describe a final
-  image or PDF that Open Design's engineering has not yet rendered as
+  image or PDF that NexusDesign's engineering has not yet rendered as
   completed.
 
 ## Build Packages

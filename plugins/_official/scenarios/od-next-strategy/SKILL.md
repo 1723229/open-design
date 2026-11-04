@@ -9,7 +9,7 @@ This bundled scenario packages the stable content used by the internal OD Next
 planning and Build recipe. It is not a portable strategy selector and does not
 activate itself.
 
-When Open Design supplies a validated V2 binding, load the assets in this order:
+When NexusDesign supplies a validated V2 binding, load the assets in this order:
 
 1. `assets/core-system-prompt.md`
 2. `assets/general-orchestration.md`
@@ -20,7 +20,7 @@ A task profile may declare `resources` — non-prompt files such as the
 prototype profile's handheld device shells under
 `assets/task-profiles/prototype/device-frames/`. They enter the package
 identity with their profile, are never concatenated into the prompt head, and
-are staged by Open Design into the project directory (`.od-frames/`) for the
+are staged by NexusDesign into the project directory (`.od-frames/`) for the
 rule card to reference.
 
 The Agent chooses whether the request needs a plan or direct work. The runtime

@@ -13,6 +13,11 @@ import {
 import { openFolderDialog } from '../../src/providers/registry';
 import type { DesignSystemSummary, ProjectTemplate, SkillSummary } from '../../src/types';
 
+const companyMode = vi.hoisted(() => ({ enabled: false }));
+vi.mock('../../src/company/CompanyProvider', () => ({
+  useCompany: () => ({ enabled: companyMode.enabled, isMember: companyMode.enabled }),
+}));
+
 vi.mock('@open-design/host', async () => {
   const actual = await vi.importActual<typeof import('@open-design/host')>('@open-design/host');
   return {
@@ -112,11 +117,54 @@ class ResizeObserverMock {
 }
 
 beforeEach(() => {
+  companyMode.enabled = false;
   globalThis.ResizeObserver = ResizeObserverMock as typeof ResizeObserver;
   Element.prototype.scrollIntoView = vi.fn();
   vi.clearAllMocks();
   mockedIsHostAvailable.mockReturnValue(false);
   mockedOpenFolderDialog.mockResolvedValue(null);
+});
+
+describe('NewProjectPanel managed server', () => {
+  it('does not expose host filesystem or unmanaged imports and unsupported project types', () => {
+    companyMode.enabled = true;
+    render(<NewProjectPanel skills={skills} designSystems={designSystems}
+      defaultDesignSystemId="clay" templates={[]} promptTemplates={[]}
+      onCreate={vi.fn()} onImportFolder={vi.fn()} onImportClaudeDesign={vi.fn()} />);
+    expect(screen.queryByText('Local storage')).toBeNull();
+    expect(screen.queryByText('Open folder')).toBeNull();
+    expect(screen.queryByText('Import Claude Design ZIP')).toBeNull();
+    expect(screen.queryByTestId('new-project-tab-live-artifact')).toBeNull();
+    expect(screen.queryByTestId('new-project-tab-media')).toBeNull();
+    expect(screen.getByTestId('new-project-tab-deck')).toBeTruthy();
+    expect(screen.getByTestId('new-project-tab-template')).toBeTruthy();
+  });
+
+  it('keeps original options and metadata behind an optional disclosure', () => {
+    companyMode.enabled = true;
+    const onCreate = vi.fn();
+    const { container } = render(<NewProjectPanel skills={skills} designSystems={designSystems}
+      defaultDesignSystemId="clay" templates={[]} promptTemplates={[]} onCreate={onCreate} />);
+    const options = container.querySelector('details.newproj-options');
+    expect(options).toBeTruthy();
+    expect(options?.hasAttribute('open')).toBe(false);
+    fireEvent.click(screen.getByText('Wireframe'));
+    fireEvent.click(screen.getByTestId('create-project'));
+    expect(onCreate.mock.calls[0]?.[0]).toMatchObject({
+      designSystemId: 'clay', metadata: { kind: 'prototype', fidelity: 'wireframe', platformTargets: ['responsive'] },
+    });
+  });
+
+  it('hides template deletion for readers and falls back from an unavailable initial tab', () => {
+    companyMode.enabled = true;
+    render(<NewProjectPanel skills={skills} designSystems={designSystems}
+      initialTab="media" defaultDesignSystemId="clay" promptTemplates={[]}
+      templates={[{ ...templates[0]!, canDelete: false }]} onCreate={vi.fn()} onDeleteTemplate={vi.fn()} />);
+    expect(screen.getByTestId('new-project-tab-prototype').getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(screen.getByTestId('new-project-tab-template'));
+    expect(screen.getByText('Landing Page')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Delete template Landing Page' })).toBeNull();
+  });
 });
 
 describe('NewProjectPanel design system defaults', () => {

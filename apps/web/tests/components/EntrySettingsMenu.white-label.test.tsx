@@ -11,7 +11,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it.each(['en', 'zh-CN', 'zh-TW'] as const)('keeps language and settings without upstream promotion in %s', (locale) => {
+it.each(['en', 'zh-CN', 'zh-TW'] as const)('keeps settings without language choices or upstream promotion in %s', (locale) => {
   const fetch = vi.fn().mockResolvedValue(new Response('{}'));
   vi.stubGlobal('fetch', fetch);
   const openSettings = vi.fn();

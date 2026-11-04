@@ -1,4 +1,4 @@
-import { SHOW_OFFICIAL_CLOUD, SHOW_UPSTREAM_LINKS } from '../product';
+import { SHOW_LANGUAGE_SELECTOR, SHOW_OFFICIAL_CLOUD, SHOW_UPSTREAM_LINKS } from '../product';
 import { useCompany } from '../company/CompanyProvider';
 import { CompanyMemberSettings } from '../company/CompanyControls';
 import { companyGeneralConfig, companyProviderUrl, useCompanyModelSettings } from '../company/useCompanyModelSettings';
@@ -6087,7 +6087,7 @@ function AdministratorSettingsDialog({
               there is no longer a standalone render block for any of them. */}
           {activeSection === 'general' ? (
             <section className="settings-section settings-general-section">
-              <div className="settings-general-block">
+              {SHOW_LANGUAGE_SELECTOR ? <div className="settings-general-block">
                 <div className="settings-general-field">
                   <span className="settings-general-label">{t('settings.language')}</span>
                   <label className="settings-general-select">
@@ -6116,7 +6116,7 @@ function AdministratorSettingsDialog({
                     <Icon name="chevron-down" size={14} />
                   </label>
                 </div>
-              </div>
+              </div> : null}
 
               <div className="settings-general-block">
                 <div className="settings-general-block-head">

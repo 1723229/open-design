@@ -35,7 +35,7 @@ truthful data, layout fitted to content, and consistency across the deck.
 
 For presentation work, the default source is one editable single-file HTML
 deck with a stable entry, complete content and slide order, openable and pageable
-from Open Design's real entry point, with no overflow or cropping. Use the deck
+from NexusDesign's real entry point, with no overflow or cropping. Use the deck
 host protocol for HTML decks so paging and product-side exports keep working.
 
 When the user explicitly requests PPTX, PDF, or another format, treat that format
@@ -199,7 +199,7 @@ Meet the following in one pass, while writing the source:
 - Edit tasks touch only the affected slides, keeping the slide-flow structure
   and every slide outside the authorized scope exactly as they were.
 - The output is a genuinely usable, still-editable single-file HTML; never
-  describe a PPTX or PDF that Open Design's engineering has not yet produced
+  describe a PPTX or PDF that NexusDesign's engineering has not yet produced
   as completed.
 
 ## Build Packages

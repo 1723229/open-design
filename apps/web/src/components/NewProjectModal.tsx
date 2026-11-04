@@ -115,12 +115,12 @@ function NewProjectModalBody({
     try {
       const result = await onCreate(input);
       if (result === false) {
-        setCreateError('Could not create project. Please try again.');
+        setCreateError(t('newproj.createError'));
         return;
       }
       onClose();
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Could not create project. Please try again.');
+      setCreateError(err instanceof Error ? err.message : t('newproj.createError'));
     } finally {
       setCreating(false);
     }
@@ -156,8 +156,8 @@ function NewProjectModalBody({
             className="new-project-modal__close"
             onClick={onClose}
             disabled={creating}
-            aria-label="Close"
-            title="Close (Esc)"
+            aria-label={t('common.close')}
+            title={`${t('common.close')} (Esc)`}
           >
             <Icon name="close" size={14} />
           </button>
@@ -186,7 +186,7 @@ function NewProjectModalBody({
           />
           {creating ? (
             <div className="new-project-modal__status" role="status">
-              Creating project…
+              {t('newproj.creating')}
             </div>
           ) : null}
           {createError ? (

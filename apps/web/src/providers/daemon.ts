@@ -150,7 +150,7 @@ export function latestUserPromptFromHistory(history: ChatMessage[]): string {
 function truncateForTranscript(content: string): string {
   if (content.length <= MAX_TRANSCRIPT_MESSAGE_CHARS) return content;
   const omitted = content.length - MAX_TRANSCRIPT_MESSAGE_CHARS;
-  return `${content.slice(0, MAX_TRANSCRIPT_MESSAGE_CHARS)}\n\n[OpenDesign truncated ${omitted} chars from this prior message before sending it to the agent. Full content remains in persisted history.]`;
+  return `${content.slice(0, MAX_TRANSCRIPT_MESSAGE_CHARS)}\n\n[NexusDesign truncated ${omitted} chars from this prior message before sending it to the agent. Full content remains in persisted history.]`;
 }
 
 function escapeTranscriptRoleDelimiters(content: string): string {
@@ -209,7 +209,7 @@ function buildPriorRunContextWarning(history: ChatMessage[]): string | null {
 
   return [
     '## context warning',
-    `OpenDesign detected ${notes.join(', ')}.`,
+    `NexusDesign detected ${notes.join(', ')}.`,
     'Keep this turn compact: summarize prior tool output, read large references from temp files, and quote only task-relevant lines.',
   ].join('\n');
 }

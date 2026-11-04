@@ -236,6 +236,31 @@ describe('company authentication and project ACL', () => {
     expect(deps.database.prepare('SELECT COUNT(*) AS n FROM company_audit').get()).toMatchObject({ n: 5 });
   });
 
+  it('reads creation snapshots only through the associated project permissions', async () => {
+    const deps = fixture();
+    deps.database.exec('CREATE TABLE applied_plugin_snapshots (id TEXT PRIMARY KEY, project_id TEXT)');
+    deps.database.prepare('INSERT INTO applied_plugin_snapshots VALUES (?,?)').run('snapshot-1', 'template-project');
+    const runtime = await initializeCompany({ ...deps, config });
+    const owner = member(runtime, 'owner');
+    const viewer = member(runtime, 'viewer');
+    const outsider = member(runtime, 'outsider');
+    runtime.registerProjectOwner('template-project', owner);
+    runtime.store.setMember('template-project', viewer.id, 'viewer', owner.id);
+    const base = await start(runtime);
+    for (const [actor, status] of [[owner, 200], [viewer, 200], [outsider, 403]] as const) {
+      const session = runtime.auth.createSession(actor);
+      const headers = { cookie: `od_company_session=${session.token}` };
+      for (const route of ['/api/applied-plugins/snapshot-1', '/api/applied-plugins/snapshot-1/canon', '/api/projects/template-project/applied-plugins']) {
+        expect((await fetch(base + route, { headers })).status, `${actor.username}: ${route}`).toBe(status);
+      }
+      expect((await fetch(base + '/api/applied-plugins', { headers })).status).toBe(403);
+      expect((await fetch(base + '/api/applied-plugins/missing', { headers })).status).toBe(403);
+    }
+    runtime.store.removeMember('template-project', viewer.id, owner.id);
+    const revoked = runtime.auth.createSession(viewer);
+    expect((await fetch(base + '/api/applied-plugins/snapshot-1', { headers: { cookie: `od_company_session=${revoked.token}` } })).status).toBe(403);
+  });
+
   it('lets project viewers export and resolve workspace scope while upload remains editor-only', async () => {
     const deps = fixture();
     const runtime = await initializeCompany({ ...deps, config });

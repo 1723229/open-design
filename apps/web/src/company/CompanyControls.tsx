@@ -1,3 +1,4 @@
+import { SHOW_LANGUAGE_SELECTOR } from '../product';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, Dialog } from '@open-design/components';
 import type { CompanyProjectMembersResponse, CompanyUsersResponse, CompanyUserUpdateRequest } from '@open-design/contracts';
@@ -195,6 +196,6 @@ export function CompanySharingDialog({ projectId, fileName, onClose }: { project
 
 export function CompanyMemberSettings({ presentation = 'modal', onClose }: { presentation?: 'page' | 'modal'; onClose: () => void }) {
   const { t, locale, setLocale } = useI18n();
-  const content = <><h2>{t('settings.general')}</h2><p>{t('company.managedSettings')}</p><label>{t('settings.language')}<select value={locale} onChange={event => setLocale(event.target.value as Locale)}>{LOCALES.map(value => <option key={value} value={value}>{LOCALE_LABEL[value]}</option>)}</select></label><Button variant="ghost" onClick={onClose}>{t('common.close')}</Button></>;
+  const content = <><h2>{t('settings.general')}</h2><p>{t('company.managedSettings')}</p>{SHOW_LANGUAGE_SELECTOR ? <label>{t('settings.language')}<select value={locale} onChange={event => setLocale(event.target.value as Locale)}>{LOCALES.map(value => <option key={value} value={value}>{LOCALE_LABEL[value]}</option>)}</select></label> : null}<Button variant="ghost" onClick={onClose}>{t('common.close')}</Button></>;
   return presentation === 'page' ? <section className={styles.panel} role="region" aria-label={t('settings.general')}>{content}</section> : <Dialog className={styles.panel} ariaLabel={t('settings.general')} onClose={onClose} closeOnEscape>{content}</Dialog>;
 }

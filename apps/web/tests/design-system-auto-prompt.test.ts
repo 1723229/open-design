@@ -6,16 +6,27 @@ import {
 } from '../src/design-system-auto-prompt';
 
 describe('isDesignSystemWorkspacePrompt', () => {
-  it('detects the sentinel prefix at the very start of the content', () => {
-    expect(isDesignSystemWorkspacePrompt(`${DESIGN_SYSTEM_WORKSPACE_PROMPT_PREFIX} Build a teal palette.`)).toBe(true);
+  it('uses the current brand for new prompts', () => {
+    expect(DESIGN_SYSTEM_WORKSPACE_PROMPT_PREFIX).toBe(
+      'Create this project as a complete NexusDesign design system workspace.',
+    );
   });
 
-  it('still detects the prefix when the content has leading whitespace or newlines', () => {
-    expect(isDesignSystemWorkspacePrompt(`\n  ${DESIGN_SYSTEM_WORKSPACE_PROMPT_PREFIX} extra detail`)).toBe(true);
-  });
+  describe.each([
+    DESIGN_SYSTEM_WORKSPACE_PROMPT_PREFIX,
+    'Create this project as a complete OpenDesign design system workspace.',
+  ])('prefix: %s', (prefix) => {
+    it('detects the sentinel prefix at the very start of the content', () => {
+      expect(isDesignSystemWorkspacePrompt(`${prefix} Build a teal palette.`)).toBe(true);
+    });
 
-  it('rejects content that mentions the sentinel mid-string', () => {
-    expect(isDesignSystemWorkspacePrompt(`Hello! ${DESIGN_SYSTEM_WORKSPACE_PROMPT_PREFIX}`)).toBe(false);
+    it('still detects the prefix when the content has leading whitespace or newlines', () => {
+      expect(isDesignSystemWorkspacePrompt(`\n  ${prefix} extra detail`)).toBe(true);
+    });
+
+    it('rejects content that mentions the sentinel mid-string', () => {
+      expect(isDesignSystemWorkspacePrompt(`Hello! ${prefix}`)).toBe(false);
+    });
   });
 
   it('rejects empty and unrelated prompts', () => {

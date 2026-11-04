@@ -2,7 +2,7 @@ import type {Express,Request} from 'express';
 import type {CompanyRuntime} from './routes.js';
 import {getCompanyTask} from './routes.js';
 import {companyRequestIsWrite,companyResourceRequest} from './policy.js';
-import {getWorkspaceResourceByResourceId} from '../db.js';
+import {getTemplate,listTemplates,getWorkspaceResourceByResourceId} from '../db.js';
 import type {CompanyResources} from './resources.js';
 
 const PRINCIPAL=Symbol('company-resource-principal');
@@ -31,6 +31,30 @@ export function companyResourceAuthority(req:Request,company:CompanyRuntime,reso
 
 export function registerCompanyResourceRoutes(app:Express,{company,resources}:{company:CompanyRuntime;resources:CompanyResources}):void {
   if(!company.enabled) return;
+  app.get('/api/templates',(req,res)=>{
+    const actor=company.getUser(req);
+    if(!actor) return void res.status(401).json({error:'Authentication required'});
+    res.json({templates:listTemplates(company.store.database).filter(template=>actor.role==='admin'
+      || (template.sourceProjectId && company.store.canAccess(actor,template.sourceProjectId)))
+      .map(template=>({...template,canDelete:actor.role==='admin' || Boolean(template.sourceProjectId && company.store.canManage(actor,template.sourceProjectId))}))});
+  });
+  app.use((req,res,next)=>{
+    const templateRoute=/^\/api\/templates(?:\/([^/]+))?$/u.exec(req.path);
+    if(!templateRoute) return next();
+    const actor=company.getUser(req);
+    if(!actor) return void res.status(401).json({error:'Authentication required'});
+    if(templateRoute[1]) {
+      const template=getTemplate(company.store.database,decodeURIComponent(templateRoute[1]));
+      if(!template) return void res.status(404).json({error:'Template not found'});
+      if(actor.role!=='admin' && (!template.sourceProjectId || !company.store.canAccess(actor,template.sourceProjectId)
+        || (companyRequestIsWrite(req) && !company.store.canManage(actor,template.sourceProjectId)))) {
+        return void res.status(403).json({error:'Template access denied'});
+      }
+    } else if(req.method==='POST' && (typeof req.body?.sourceProjectId!=='string' || !company.store.canAccess(actor,req.body.sourceProjectId,true))) {
+      return void res.status(403).json({error:'Source project access denied'});
+    }
+    next();
+  });
   app.get('/api/company/resources/context',(req,res)=>{
     const actor=company.getUser(req);
     if(!actor) return void res.status(401).json({error:'Authentication required'});
@@ -59,6 +83,10 @@ export function registerCompanyResourceRoutes(app:Express,{company,resources}:{c
       const actor=company.getUser(req);
       if(!actor) return void res.status(401).json({error:'Authentication required'});
       try {
+        if(req.body?.metadata?.kind==='template' && typeof req.body.metadata.templateId==='string') {
+          const template=getTemplate(company.store.database,req.body.metadata.templateId);
+          if(!template || (actor.role!=='admin' && (!template.sourceProjectId || !company.store.canAccess(actor,template.sourceProjectId)))) throw new Error('Template is unavailable');
+        }
         if(typeof req.body?.appliedPluginSnapshotId==='string') {
           const source=company.store.database.prepare('SELECT project_id AS projectId FROM applied_plugin_snapshots WHERE id=?').get(req.body.appliedPluginSnapshotId) as {projectId:string}|undefined;
           if(!source || !company.store.canAccess(actor,source.projectId)) throw new Error('Plugin snapshot is unavailable');

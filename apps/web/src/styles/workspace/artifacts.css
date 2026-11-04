@@ -3696,6 +3696,11 @@ button.agent-group-rescan-btn:hover:not(:disabled) {
   background: var(--bg-subtle);
 }
 .newproj-section { display: flex; flex-direction: column; gap: 6px; }
+.newproj-body > * { flex-shrink: 0; }
+.newproj-name-row { display: flex; flex-direction: column; gap: 6px; }
+.newproj-options { border-top: 1px solid var(--border); padding-top: 12px; }
+.newproj-options > summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.newproj-options[open] > :not(summary) { margin-top: 12px; }
 /* -------- "Start from" rail (blank-first scenario templates) --------
    Horizontal card rail on the prototype/deck tabs. The Blank card is
    always first and selected by default; template cards reroute create
@@ -3712,9 +3717,11 @@ button.agent-group-rescan-btn:hover:not(:disabled) {
   scrollbar-width: thin;
 }
 .newproj-start-card {
+  height: auto;
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   min-width: 0;
   padding: 0;
   border: 1px solid var(--border);
@@ -3735,6 +3742,7 @@ button.agent-group-rescan-btn:hover:not(:disabled) {
   box-shadow: 0 0 0 1px var(--text-strong);
 }
 .newproj-start-thumb {
+  flex-shrink: 0;
   height: 58px;
   display: flex;
   align-items: center;
@@ -4103,6 +4111,7 @@ button.agent-group-rescan-btn:hover:not(:disabled) {
   gap: 8px;
 }
 .fidelity-card {
+  height: auto;
   position: relative;
   display: flex;
   flex-direction: column;

@@ -35,7 +35,7 @@ If an essential answer is missing, ask through a question-form and omit the mark
 During production, execute the plan, then describe the actual files and remaining
 gaps in prose. Never emit another production-ready marker in production.
 Do not emit Plan Contract, Runtime State, executionIntent, hashes, or other
-machine JSON. Host identity and lifecycle are recorded by Open Design.
+machine JSON. Host identity and lifecycle are recorded by NexusDesign.
 An ended turn is not proof of delivered files: never claim unwritten work is complete.`;
 
 export function renderOdNextProductionReadyInstructions(key: string): string {
@@ -89,7 +89,7 @@ Drop any unrequested wrapper, export, or extra deliverable from that plan.
 Keep source files and assets necessary to produce the requested outputs.
 Use the already loaded deliverable Skills and documented tool help for commands
 and input shapes. Work within this project and its authorized references; do not
-search Open Design's application source, other projects, or credentials to
+search NexusDesign's application source, other projects, or credentials to
 reverse-engineer a tool. If a documented call fails, use its actual error and
 help to correct the input; report an unavailable capability rather than inventing it.
 Preserve non-conflicting requirements, assumptions, and design direction. This is the production turn; do not re-plan or request

@@ -104,6 +104,51 @@ it('rejects invalid upload paths as client errors without writing files',async()
   expect(listed.data.files).toEqual([]);
 });
 
+it('reuses saved project templates while enforcing source-project access on every read and create',async()=>{
+  const source='qa-saved-template-source';
+  expect((await request('owner','/api/projects','POST',{id:source,name:'Template source'})).status).toBe(200);
+  expect((await request('owner',`/api/projects/${source}/files`,'POST',{name:'index.html',content:'<!doctype html><h1>Private template</h1>'})).status).toBe(200);
+  const saved=await request('owner','/api/templates','POST',{name:'Private saved template',sourceProjectId:source});
+  expect(saved.status,JSON.stringify(saved.data)).toBe(200);
+  const id=saved.data.template.id as string;
+  const list=await request('owner','/api/templates');
+  expect(list.data.templates.some((item:{id:string})=>item.id===id)).toBe(true);
+  expect((await request('outsider','/api/templates')).data.templates.some((item:{id:string})=>item.id===id)).toBe(false);
+  expect((await request('outsider',`/api/templates/${id}`)).status).toBe(403);
+  expect((await request('outsider','/api/templates','POST',{name:'Stolen',sourceProjectId:source})).status).toBe(403);
+  expect((await request('outsider','/api/projects','POST',{id:'stolen-template',name:'Stolen',metadata:{kind:'template',templateId:id}})).status).toBe(403);
+  await request('owner',`/api/company/projects/${source}/members`,'PUT',{userId:sessions.get('reviewer')!.id,role:'viewer'});
+  const readable=await request('reviewer','/api/templates');
+  expect(readable.data.templates.find((item:{id:string})=>item.id===id).canDelete).toBe(false);
+  expect((await request('reviewer',`/api/templates/${id}`)).status).toBe(200);
+  expect((await request('reviewer',`/api/templates/${id}`,'DELETE')).status).toBe(403);
+  expect((await request('reviewer','/api/templates','POST',{name:'Private saved template',sourceProjectId:source,description:'Changed by viewer'})).status).toBe(403);
+  expect((await request('owner',`/api/templates/${id}`)).data.template.description).not.toBe('Changed by viewer');
+  const copy=await request('reviewer','/api/projects','POST',{id:'own-template-copy',name:'Template copy',metadata:{kind:'template',templateId:id}});
+  expect(copy.status,JSON.stringify(copy.data)).toBe(200);
+  const files=await request('reviewer','/api/projects/own-template-copy/files');
+  expect(files.data.files.some((file:{name:string})=>file.name==='index.html')).toBe(true);
+  await request('owner',`/api/company/projects/${source}/members/${sessions.get('reviewer')!.id}`,'DELETE');
+  expect((await request('reviewer',`/api/templates/${id}`)).status).toBe(403);
+  expect((await request('owner',`/api/templates/${id}`,'DELETE')).status).toBe(200);
+},30_000);
+
+it('preserves original project metadata when members auto-name a new project without allowing protected changes',async()=>{
+  const created=await request('owner','/api/projects','POST',{id:'qa-auto-name-project',name:'Prototype',metadata:{kind:'prototype',nameSource:'generated',platformTargets:['responsive'],fidelity:'high-fidelity'}});
+  expect(created.status,JSON.stringify(created.data)).toBe(200);
+  const original=(await request('owner','/api/projects/qa-auto-name-project')).data.project;
+  for(const nameSource of ['prompt','agent']) {
+    const renamed=await request('owner','/api/projects/qa-auto-name-project','PATCH',{name:`Title from ${nameSource}`,metadata:{...original.metadata,nameSource}});
+    expect(renamed.status,JSON.stringify(renamed.data)).toBe(200);
+    expect(renamed.data.project.metadata).toEqual({...original.metadata,nameSource});
+  }
+  for(const extra of [{baseDir:'/host-private'},{platformTargets:['desktop']},{localCatalogScopes:{designSystem:{workspaceId:'foreign'}}},{strategyBinding:{taskProfile:'foreign'}}]) {
+    expect((await request('owner','/api/projects/qa-auto-name-project','PATCH',{metadata:{...original.metadata,...extra}})).status).toBe(403);
+  }
+  await request('owner','/api/company/projects/qa-auto-name-project/members','PUT',{userId:sessions.get('reviewer')!.id,role:'viewer'});
+  expect((await request('reviewer','/api/projects/qa-auto-name-project','PATCH',{name:'Viewer rename',metadata:{...original.metadata,nameSource:'agent'}})).status).toBe(403);
+});
+
 it('provides authorized local share history for the original delete confirmations',async()=>{
   const created=await request('owner','/api/projects','POST',{id:'company-delete-history',name:'Delete history'});
   expect(created.status).toBe(200);

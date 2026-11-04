@@ -458,7 +458,7 @@ export function attachCodexAppServerSession(
     {
       clientInfo: {
         name: 'open-design',
-        title: 'Open Design',
+        title: 'NexusDesign',
         version: opts.clientVersion ?? '0.0.0',
       },
       capabilities: { experimentalApi: opts.manageThreadVisibility === true, requestAttestation: false },

@@ -5016,6 +5016,12 @@ export const en: Dict = {
   // Full-page Settings (`/settings`): sidebar nav head above the section list.
   'settings.pageBackToHome': 'Back to home',
   'settings.pageNavGroupPersonal': 'Personal',
+  'newproj.moreOptions': 'More options',
+  'newproj.optionsHint': 'Optional. Defaults create a responsive web design with finished visuals.',
+  'newproj.designSystemHint': 'Sets the colors, fonts and visual style. Keep the default if unsure.',
+  'newproj.managedFooter': 'Saved on the server. Personal designs are private; team designs are shared with team members.',
+  'newproj.createError': 'Could not create project. Please try again.',
+  'newproj.creating': 'Creating project…',
   'newproj.startFromLabel': 'Start from',
   'newproj.startBlank': 'Blank',
   'newproj.startBlankHint': 'Start from scratch',

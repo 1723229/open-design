@@ -196,7 +196,7 @@ record them in the Design Spec:
 
 When the target device is a phone — the brief names iPhone / iOS, Android, or
 a mobile / 手机 app without naming a platform — the prototype ships inside the
-bundled handset shell, never a hand-drawn approximation of one. Open Design
+bundled handset shell, never a hand-drawn approximation of one. NexusDesign
 stages the shells at `.od-frames/` in the project directory and, when it
 resolved the platform, names the selected shell in the `device-frame` context
 fact and quotes its source in `device-frame-shell`.
@@ -244,7 +244,7 @@ fact and quotes its source in `device-frame-shell`.
 
 ### Variable-length text and stacked information
 
-Open Design stages `.od-frames/layout.css` beside the handset shells and
+NexusDesign stages `.od-frames/layout.css` beside the handset shells and
 quotes it in the `layout-primitives` context fact. It is structure only —
 display, flex/grid, overflow, wrapping, ratio, and opt-in icon geometry — and
 sets no palette, type, spacing scale, or component look. Put the whole block

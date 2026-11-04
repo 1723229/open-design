@@ -64,6 +64,7 @@ export function installCompanyHttpPolicy(app: Express, deps: {
   models?: { pinActive(): CompanyModelRoute };
   holdModelRoute?(req: import('express').Request, res: import('express').Response, route: CompanyModelRoute): void;
   resolveProjectRoot?(projectId: string): string;
+  resolveProjectMetadata?(projectId: string): unknown;
   projectIsExecuting?(projectId: string): boolean;
 }): void {
   app.use(async (req, res, next) => {
@@ -86,7 +87,7 @@ export function installCompanyHttpPolicy(app: Express, deps: {
       const readOrInput = /^(?:tabs|export(?:\/.*)?|archive(?:\/.*)?|preview(?:\/.*)?|preview-url|submissions|comments\/read|conversations\/[^/]+\/comments(?:\/.*)?)$/u.test(operation);
       const conversationSync = (req.method === 'PUT' && /^conversations\/[^/]+\/messages\/[^/]+$/u.test(operation))
         || (req.method === 'PATCH' && /^conversations\/[^/]+$/u.test(operation));
-      const presentationSync = req.method === 'PATCH' && !operation && companyMemberProjectPatchAllowed(req.body);
+      const presentationSync = req.method === 'PATCH' && !operation && companyMemberProjectPatchAllowed(req.body, deps.resolveProjectMetadata?.(decodeURIComponent(projectMutation[1]!)));
       if (!readOrInput && !conversationSync && !presentationSync && deps.projectIsExecuting?.(decodeURIComponent(projectMutation[1]!))) return res.status(409).json({error:'项目正在生成，请等待完成后再修改文件',code:'PROJECT_BUSY'});
     }
     if (req.method === 'GET' && req.path === '/api/workspace/directory') return res.json({items:[],activeWorkspaceId:null});

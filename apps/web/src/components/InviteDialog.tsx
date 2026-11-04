@@ -1,3 +1,4 @@
+import { SHOW_LANGUAGE_SELECTOR } from '../product';
 import type { WorkspaceInviteEntry } from '@open-design/contracts/analytics';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
@@ -356,7 +357,7 @@ export function InviteDialog({ open, onClose, workspaceContext, onSubmit, canAss
         <footer className={styles.footer}>{!onboarding ? <Button className={styles.cancel} onClick={close} disabled={submitting}>{t('workspaceInvite.cancel')}</Button> : null}
           <Button type="submit" className={styles.submit} disabled={submitting}>{batchSuccess !== null ? batchSuccess === 0 ? t('workspaceInvite.sent') : t('workspaceInvite.batchSent').replace('{count}', String(batchSuccess)) : submitting ? t('workspaceInvite.sending') : t('workspaceInvite.confirm')}</Button></footer>
       </form></>}
-      {onboarding ? <>{!readyToEnter ? <Button className={styles.skip} disabled={submitting} onClick={() => { click('skip_invite'); onFinish?.(sentCount, 'skipped'); }}>{t('workspaceInvite.skip')}</Button> : null}<footer className={styles.onboardingFooter}><label className={styles.languagePicker}><select aria-label={LOCALE_LABEL[locale]} value={locale} onChange={event => setLocale(event.target.value as Locale)}>{LOCALES.map(code => <option key={code} value={code}>{LOCALE_LABEL[code]}</option>)}</select></label><span>{`© ${new Date().getFullYear()} NexusDesign · ${t('settings.onboardingCloudRights')}`}</span></footer></> : null}
+      {onboarding ? <>{!readyToEnter ? <Button className={styles.skip} disabled={submitting} onClick={() => { click('skip_invite'); onFinish?.(sentCount, 'skipped'); }}>{t('workspaceInvite.skip')}</Button> : null}<footer className={styles.onboardingFooter}>{SHOW_LANGUAGE_SELECTOR ? <label className={styles.languagePicker}><select aria-label={LOCALE_LABEL[locale]} value={locale} onChange={event => setLocale(event.target.value as Locale)}>{LOCALES.map(code => <option key={code} value={code}>{LOCALE_LABEL[code]}</option>)}</select></label> : null}<span>{`© ${new Date().getFullYear()} NexusDesign · ${t('settings.onboardingCloudRights')}`}</span></footer></> : null}
     </section>
     {onboarding ? <div className={styles.art} aria-hidden="true"><img src="/onboarding/registration-invite-art.webp" alt="" /></div> : null}
     {owner && openRoleIndex !== null ? createPortal(<div className={`${styles.menu} ${onboarding ? styles.onboardingMenu : styles.dialogMenu}`} ref={menu} style={menuPos} role="listbox" id={`${id}-roles`}

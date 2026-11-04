@@ -177,7 +177,7 @@ installation of AE, Blender, a paid provider or a new framework the default.
 
 ## Author reliable editable motion
 
-For a new Open Design film, use timeline-driven HTML with GSAP and optional
+For a new NexusDesign film, use timeline-driven HTML with GSAP and optional
 SVG/Canvas. HTML/SVG suit typography, crisp diagrams and UI; Canvas suits dense
 marks, fields and procedural worlds. Combine them when useful. Preserve an
 existing supported renderer instead of rebuilding it just to fit this default.
@@ -187,7 +187,7 @@ small configuration. Group each scene's elements and motion together. Separate
 content/data from drawing. Reuse geometry and cached textures; cap offscreen
 work and particle counts. Keep a scene stable at any requested timestamp.
 
-The Open Design video composition contract:
+The NexusDesign video composition contract:
 
 ```html
 <div id="main" data-composition-id="main" data-start="0"
@@ -243,7 +243,7 @@ the MP4 exporter seeks with them suppressed.
 Audio-reactive motion needs a precomputed envelope or known beat map when exact
 replay matters. Never imply that an arbitrary pulse is analysis of the music.
 
-Open Design scaffolds and embeds shared source playback: open the HTML to
+NexusDesign scaffolds and embeds shared source playback: open the HTML to
 automatically loop the film, with no separate player bar. Click the picture to
 pause/resume or unlock audio blocked by browser autoplay. The internal
 `window.__odMotionPlayer` interface retains play/pause, seek and replay. Preserve its `script[data-od-motion-source-player]`. Do not create
@@ -322,7 +322,7 @@ not a completed replication.
    from page text or a thumbnail.
 2. Read `REPLICATE.md` and follow it: it governs timing, fidelity, editable
    structure, pictures, type, sound and the reference comparison for this film. It is
-   the same rule set Open Design's official templates are replicated with.
+   the same rule set NexusDesign's official templates are replicated with.
 3. Scaffold the film with the host, then render it — the replication is not
    delivered until the MP4 exists:
    `"$OD_NODE_BIN" "$OD_BIN" media scaffold --project "$OD_PROJECT_ID" --composition-dir "motion-source/film"`,
@@ -359,7 +359,7 @@ same linked MP4 afterwards.
 
 ## Video production and dual delivery
 
-For video briefs, use Open Design's existing local HyperFrames renderer during
+For video briefs, use NexusDesign's existing local HyperFrames renderer during
 Build. It needs no video-generation API key. Do not ask the user to render it
 manually or run a second renderer. Plan declares `hyperframes-html` as the
 production route, editable source as canonical, and MP4 as a required derived
@@ -367,7 +367,7 @@ output. For interactive briefs use `html` and source only.
 
 Keep source and MP4 paths in the readable plan and in the composition's MP4
 link. The exporter checks its actual output path and the declared audio policy;
-Open Design does not parse or freeze a model-authored plan. Do not add machine
+NexusDesign does not parse or freeze a model-authored plan. Do not add machine
 blocks or a contract-repair turn.
 
 Apply this delivery guidance only to the user's actual current video-motion

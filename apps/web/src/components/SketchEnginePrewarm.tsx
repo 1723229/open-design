@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Excalidraw } from '@excalidraw/excalidraw';
+import { DEFAULT_UI_LOCALE } from '../product';
 import styles from './SketchEnginePrewarm.module.css';
 
 /**
@@ -75,6 +76,7 @@ export function SketchEnginePrewarm() {
   return (
     <div className={styles.prewarm} aria-hidden="true" data-testid="sketch-engine-prewarm">
       <Excalidraw
+        langCode={DEFAULT_UI_LOCALE}
         viewModeEnabled
         handleKeyboardGlobally={false}
         detectScroll={false}

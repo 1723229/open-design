@@ -39,6 +39,7 @@ test('member bootstrap filters credentials and returns the supported SSE protoco
     readConfig: async()=>({agentId:'codex',agentModels:{codex:{model:'model'}},agentCliEnv:{codex:{OPENAI_API_KEY:'SECRET'}}}),
     detectAgents: async()=>[{id:'codex',name:'Codex',bin:'codex',available:false,authStatus:'missing',path:'/private/config',diagnostics:[]}],
     projectIsExecuting: id=>id==='busy',
+    resolveProjectMetadata: id=>id==='busy'?{kind:'prototype',platformTargets:['responsive'],fidelity:'high-fidelity'}:undefined,
   });
   app.post('/api/runs',(req,res)=>res.json(req.body));
   app.get('/api/projects/p/files/a.html',(_req,res)=>res.type('html').send('<script>1</script>'));
@@ -66,6 +67,8 @@ test('member bootstrap filters credentials and returns the supported SSE protoco
   expect((await fetch(`${base}/api/projects/busy/conversations/c/messages/m`,{method:'PUT',headers:{'content-type':'application/json'},body:'{}'})).status).toBe(200);
   expect((await fetch(`${base}/api/projects/busy/conversations/c`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({title:'Generated title'})})).status).toBe(200);
   expect((await fetch(`${base}/api/projects/busy`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({name:'Generated name',metadata:{kind:'other',nameSource:'agent'}})})).status).toBe(200);
+  expect((await fetch(`${base}/api/projects/busy`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({name:'Generated name',metadata:{kind:'prototype',nameSource:'agent',platformTargets:['responsive'],fidelity:'high-fidelity'}})})).status).toBe(200);
+  expect((await fetch(`${base}/api/projects/busy`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({metadata:{kind:'prototype',platformTargets:['desktop']}})})).status).toBe(409);
   expect((await fetch(`${base}/api/projects/busy`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({metadata:{baseDir:'/host'}})})).status).toBe(409);
 });
 

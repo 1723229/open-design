@@ -1,3 +1,4 @@
+import { SHOW_LANGUAGE_SELECTOR } from '../product';
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { popoverIn, staggerContainer, listItem } from '../motion';
@@ -40,6 +41,8 @@ export function LanguageMenu({
       document.removeEventListener('keydown', onKey);
     };
   }, [open]);
+
+  if (!SHOW_LANGUAGE_SELECTOR) return null;
 
   return (
     <div className="lang-menu-wrap" ref={wrapRef}>

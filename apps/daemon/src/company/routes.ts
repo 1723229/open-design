@@ -44,6 +44,7 @@ export interface InitializeCompanyOptions {
   ldap?: CompanyLdap;
   now?: () => number;
   resolveRunProjectId?: (runId: string) => string | null;
+  resolveProjectMetadata?: (projectId: string) => unknown;
   projectIsBusy?: (projectId: string) => boolean;
   taskStatus?: (user:CompanyUser) => import('@open-design/contracts').CompanyTaskStatusResponse;
   authenticateTask?: (req: Request) => CompanyTaskPrincipal | null;
@@ -76,6 +77,10 @@ export async function initializeCompany(options: InitializeCompanyOptions): Prom
     store.markEnabled();
   }
   const router = Router();
+  const requestPolicy = (req: Request) => companyMemberPolicy(req, options.resolveRunProjectId, (snapshotId) => {
+    const row = store.database.prepare('SELECT project_id AS projectId FROM applied_plugin_snapshots WHERE id=?').get(snapshotId) as {projectId: string | null} | undefined;
+    return row?.projectId ?? null;
+  }, options.resolveProjectMetadata);
   router.use(createCompanyIntegrationRoutes({config,store,auth,now:options.now ?? Date.now,issueSession(req,res,user) {
     const previous = cookieToken(req);
     // Opening another source project must not invalidate existing tabs' CSRF state.
@@ -203,7 +208,7 @@ export async function initializeCompany(options: InitializeCompanyOptions): Prom
       if (!config.teams?.enabled || typeof req.body.companyTeamId !== 'string' || !store.teams.canAccess(session.user,req.body.companyTeamId,true)) return error(res,403,'Team write permission required');
     }
     if (session.user.role === 'admin') {
-      const policy = companyMemberPolicy(req, options.resolveRunProjectId);
+      const policy = requestPolicy(req);
       const projectId = policy.projectId ?? /^\/api\/projects\/([^/]+)/u.exec(req.path)?.[1]
         ?? options.resolveRunProjectId?.(/^\/api\/runs\/([^/]+)/u.exec(req.path)?.[1] ?? '');
       if (projectId) store.audit(session.user.id, companyRequestIsWrite(req) ? 'admin.project.write' : 'admin.project.read', decodeURIComponent(projectId));
@@ -211,7 +216,7 @@ export async function initializeCompany(options: InitializeCompanyOptions): Prom
       trackStream(res, token, session.user, projectId ? decodeURIComponent(projectId) : undefined);
       return next();
     }
-    const policy = companyMemberPolicy(req, options.resolveRunProjectId);
+    const policy = requestPolicy(req);
     if (!policy.allowed || (policy.projectId && (!(policy.comment ? store.canComment(session.user,policy.projectId) : store.canAccess(session.user, policy.projectId, policy.write)) || (policy.ownerOnly && !store.canManage(session.user, policy.projectId))))) return error(res, 403, 'Access denied');
     trackStream(res, token, session.user, policy.projectId);
     next();

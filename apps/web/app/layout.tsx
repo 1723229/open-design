@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import { DEFAULT_UI_LOCALE } from '../src/product';
 import { I18nProvider } from '../src/i18n';
 import { AnalyticsProvider } from '../src/analytics/provider';
 import '@excalidraw/excalidraw/index.css';
@@ -41,7 +42,7 @@ const themeInitScript = `(function(){document.documentElement.setAttribute('data
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang='en' suppressHydrationWarning>
+    <html lang={DEFAULT_UI_LOCALE} suppressHydrationWarning>
       {/* eslint-disable-next-line @next/next/no-sync-scripts */}
       <head>
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: intentional theme-init inline script to prevent FOUC */}

@@ -1968,8 +1968,8 @@ export function createAgentRuntimeToolPrompt(
     '',
     `- Daemon URL: \`${daemonUrl}\` (also available as \`OD_DAEMON_URL\`).`,
     '- `OD_NODE_BIN` is the absolute path to the Node-compatible runtime that started the daemon; packaged desktop installs provide this even when the user has no system `node` on PATH.',
-    '- `OD_HYPERFRAMES_BIN` is the absolute path to Open Design\'s pinned HyperFrames CLI. Run lightweight commands through `OD_NODE_BIN`; use `"$OD_NODE_BIN" "$OD_BIN" media scaffold` for composition setup and never use a user-level `npx` cache.',
-    '- `OD_BIN` is the absolute path to the OpenDesign CLI script. On POSIX shells run wrappers with `"$OD_NODE_BIN" "$OD_BIN" tools ...`; do not call bare `od`, which may resolve to the system octal-dump command on Unix-like systems.',
+    '- `OD_HYPERFRAMES_BIN` is the absolute path to NexusDesign\'s pinned HyperFrames CLI. Run lightweight commands through `OD_NODE_BIN`; use `"$OD_NODE_BIN" "$OD_BIN" media scaffold` for composition setup and never use a user-level `npx` cache.',
+    '- `OD_BIN` is the absolute path to the NexusDesign CLI script. On POSIX shells run wrappers with `"$OD_NODE_BIN" "$OD_BIN" tools ...`; do not call bare `od`, which may resolve to the system octal-dump command on Unix-like systems.',
     '- On PowerShell use `& $env:OD_NODE_BIN $env:OD_BIN tools ...`; on cmd.exe use `"%OD_NODE_BIN%" "%OD_BIN%" tools ...`.',
     tokenLine,
     '- Prefer project wrapper commands through `OD_NODE_BIN` + `OD_BIN` over raw HTTP. The wrappers read these environment values automatically.',
@@ -3624,6 +3624,7 @@ export async function startServer({
     dataRoot: RUNTIME_DATA_DIR,
     database: db,
     resolveRunProjectId: (id) => design.runs.get(id)?.projectId ?? null,
+    resolveProjectMetadata: (id) => getProject(db, id)?.metadata,
     projectIsBusy: (id) => companyJobQueue?.list().some(job => job.projectId === id && ['queued','running'].includes(job.state)) ?? false,
     taskStatus: user=>{
       if(!companyJobQueue) throw new Error('Task queue is unavailable');
@@ -3694,6 +3695,7 @@ export async function startServer({
     models: companyModels,
     holdModelRoute: companyModelAdmissions.holdModelRoute,
     resolveProjectRoot: (id) => resolveProjectDir(PROJECTS_DIR, id, getProject(db, id)?.metadata),
+    resolveProjectMetadata: (id) => getProject(db, id)?.metadata,
     projectIsExecuting: (id) => companyJobQueue?.list().some((job) => job.projectId === id && ['queued','running'].includes(job.state)) ?? false,
   });
   if (companyModels) registerCompanyModelRoutes(app, {
@@ -18481,7 +18483,7 @@ export async function startServer({
       systemPrompt: [
         renderOrbitTemplateSystemPrompt(template),
         systemPrompt,
-        'You are Orbit, an autonomous activity-summary agent inside OpenDesign.',
+        'You are Orbit, an autonomous activity-summary agent inside NexusDesign.',
         'You must discover connectors and connector tools yourself through the OD CLI; the daemon has not chosen tools for you.',
         'You must create and register a Live Artifact as the final deliverable. Do not merely describe what you would do.',
         'Do not ask follow-up questions, do not emit <question-form>, and do not wait for user input. This run is unattended; pick reasonable defaults and complete the artifact.',

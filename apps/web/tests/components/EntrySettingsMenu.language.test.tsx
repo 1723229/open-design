@@ -60,53 +60,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('EntrySettingsMenu language picker a11y', () => {
-  it('changes the language while keeping the menu free of upstream links', () => {
-    const { container } = renderMenu();
+describe('EntrySettingsMenu fixed-language distribution', () => {
+  it.each(['en', 'zh-CN'] as const)('hides language choices and retains settings in %s', (locale) => {
+    const { container } = renderMenu(locale);
     fireEvent.click(screen.getByTestId('entry-settings-menu-trigger'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'English' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: '简体中文' }));
-    fireEvent.click(screen.getByTestId('entry-settings-menu-trigger'));
-    expect(screen.getByRole('menuitem', { name: '简体中文' })).toBeTruthy();
+    expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0);
+    expect(container.querySelector('.entry-settings-menu__select')).toBeNull();
+    expect(screen.getByTestId('entry-settings-open-details')).toBeTruthy();
     expect(container.querySelectorAll('a')).toHaveLength(0);
-  });
-
-  it('keeps one consistent menu model and hides the collapsed locale list from a11y/focus', () => {
-    const { container } = renderMenu();
-    fireEvent.click(screen.getByTestId('entry-settings-menu-trigger'));
-
-    // The picker trigger participates in the surrounding role="menu" popover as
-    // a menuitem that opens a submenu — not a listbox combobox.
-    const langTrigger = container.querySelector(
-      '.entry-settings-menu__select-trigger',
-    ) as HTMLElement;
-    expect(langTrigger.getAttribute('role')).toBe('menuitem');
-    expect(langTrigger.getAttribute('aria-haspopup')).toBe('menu');
-    expect(langTrigger.getAttribute('aria-expanded')).toBe('false');
-
-    // No mixed listbox/option ARIA — locale choices are menuitemradios.
-    expect(container.querySelector('[role="listbox"]')).toBeNull();
-    expect(container.querySelector('[role="option"]')).toBeNull();
-    const panel = container.querySelector(
-      '.entry-settings-menu__select-panel',
-    ) as HTMLElement;
-    expect(panel.getAttribute('role')).toBe('menu');
-    const radios = panel.querySelectorAll('[role="menuitemradio"]');
-    expect(radios.length).toBeGreaterThan(1);
-    expect(
-      Array.from(radios).filter((r) => r.getAttribute('aria-checked') === 'true'),
-    ).toHaveLength(1);
-
-    // Collapsed: the list is inert, so the options stay out of the a11y tree
-    // and the tab order even though they remain mounted for the animation.
-    const list = container.querySelector(
-      '.entry-settings-menu__select-list',
-    ) as HTMLElement;
-    expect(list.hasAttribute('inert')).toBe(true);
-
-    // Opening flips aria-expanded and lifts inert.
-    fireEvent.click(langTrigger);
-    expect(langTrigger.getAttribute('aria-expanded')).toBe('true');
-    expect(list.hasAttribute('inert')).toBe(false);
   });
 });

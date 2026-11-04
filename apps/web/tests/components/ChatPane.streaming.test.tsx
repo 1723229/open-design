@@ -599,7 +599,7 @@ describe('ChatPane streaming state', () => {
       agentId: 'amr',
     });
 
-    expect(text).toMatch(/^json-rpc id 4: Connection reset by server\n\nOpenDesign run error diagnostics/);
+    expect(text).toMatch(/^json-rpc id 4: Connection reset by server\n\nNexusDesign run error diagnostics/);
     expect(text).not.toContain('raw_error:');
     expect(text).toContain('error_code: UPSTREAM_UNAVAILABLE');
     expect(text).not.toContain('\nerror:\n');
@@ -617,7 +617,7 @@ describe('ChatPane streaming state', () => {
       agentId: 'amr',
     });
 
-    expect(text).toMatch(/^Connection dropped\. Try again\.\n\nOpenDesign run error diagnostics/);
+    expect(text).toMatch(/^Connection dropped\. Try again\.\n\nNexusDesign run error diagnostics/);
     expect(text).not.toContain('raw_error:');
     expect(text).toContain('error_code: AGENT_CONNECTION_DROPPED');
     expect(text).not.toContain('\nerror:\n');
@@ -665,7 +665,7 @@ describe('ChatPane streaming state', () => {
 
     expect(text).not.toContain('agent_stderr_tail');
     expect(text).toMatch(
-      /^json-rpc id 4: Connection reset by server\n\nOpenDesign run error diagnostics/,
+      /^json-rpc id 4: Connection reset by server\n\nNexusDesign run error diagnostics/,
     );
   });
 
@@ -721,7 +721,7 @@ describe('ChatPane streaming state', () => {
     expect(text.closest('.msg.user')).not.toBeNull();
   });
 
-  it('offers Cloud switching on BYOK error states without the former Local CLI action', () => {
+  it('keeps BYOK error diagnostics without offering hidden Cloud or Local CLI actions', () => {
     const onSwitchToLocalCli = vi.fn();
     const onSwitchToAmrAndRetry = vi.fn();
     const messages: ChatMessage[] = [
@@ -768,12 +768,11 @@ describe('ChatPane streaming state', () => {
       />,
     );
 
-    const action = screen.getByRole('button', { name: 'chat.amrCard.switchCta' });
-    fireEvent.click(action);
-
-    expect(onSwitchToAmrAndRetry).toHaveBeenCalledExactlyOnceWith(messages[1]);
+    expect(screen.getByRole('button', { name: 'chat.runError.exportLogsCta' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'chat.amrCard.switchCta' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Use Local CLI' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'promptTemplates.retry' })).toBeNull();
+    expect(onSwitchToAmrAndRetry).not.toHaveBeenCalled();
     expect(onSwitchToLocalCli).not.toHaveBeenCalled();
   });
 
@@ -1163,12 +1162,15 @@ describe('ChatPane streaming state', () => {
     expect(screen.queryByText('path-0-0-0-0-1')).toBeNull();
   });
 
-  it('summarizes auto-sent design-system workspace prompts', () => {
+  it.each([
+    DESIGN_SYSTEM_WORKSPACE_PROMPT_PREFIX,
+    'Create this project as a complete OpenDesign design system workspace.',
+  ])('summarizes auto-sent design-system workspace prompts: %s', (prefix) => {
     const messages: ChatMessage[] = [
       {
         id: 'user-1',
         role: 'user',
-        content: `${DESIGN_SYSTEM_WORKSPACE_PROMPT_PREFIX}
+        content: `${prefix}
 Use the files in this project as the design system source for future projects.
 Expected output:
 - A clear DESIGN.md with all generated rules.`,
@@ -1215,7 +1217,7 @@ Expected output:
     expect(screen.getByText('chat.designSystemStatus.title')).toBeTruthy();
     expect(screen.getByText('chat.designSystemStatus.description')).toBeTruthy();
     expect(document.querySelector('.user-bubble')).toBeNull();
-    expect(screen.queryByText(DESIGN_SYSTEM_WORKSPACE_PROMPT_PREFIX, { exact: false })).toBeNull();
+    expect(screen.queryByText(prefix, { exact: false })).toBeNull();
     expect(screen.getByRole('button', { name: 'chat.copyPrompt' })).toBeTruthy();
   });
 

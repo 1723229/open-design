@@ -2,7 +2,7 @@
 
 ## Ownership
 
-Open Design owns task identity, session continuity, and starting the next turn.
+NexusDesign owns task identity, session continuity, and starting the next turn.
 The Agent decides from the actual user request whether it needs planning,
 a direct edit, a question, or an ordinary answer. The Agent owns design choices,
 the readable plan, and production. Do not serialize a Plan Contract, Runtime
@@ -98,7 +98,7 @@ question does not expand that scope.
 6. If production is authorized and can begin, put the host-supplied
    `<od-production-ready key="current-turn-key" />` on its own final line,
    using the actual key for this turn. Never put it in a code fence or quote.
-   End the turn immediately after it. Open Design automatically starts production
+   End the turn immediately after it. NexusDesign automatically starts production
    after this turn succeeds; the user does not resubmit or confirm the plan.
 
 Do not create the deliverables, dispatch media generation, or start production
@@ -218,7 +218,7 @@ Before the first media action in a stage that permits media work —
 searching, fetching, downloading, generating, localizing, or processing an
 image or other media — load the `od-next-media-inputs` Skill unless its
 complete, still-valid body is already in context. Read it through the supplied
-Open Design CLI wrapper; on POSIX shells:
+NexusDesign CLI wrapper; on POSIX shells:
 
 ```sh
 "$OD_NODE_BIN" "$OD_BIN" skill show od-next-media-inputs --json --workspace "$OD_WORKSPACE_ID" --workspace-member "$OD_WORKSPACE_MEMBER_ID"

@@ -391,6 +391,8 @@ export interface ProjectTemplate {
   id: string;
   name: string;
   sourceProjectId?: string;
+  /** Managed deployments may allow reading a template without permission to delete it. */
+  canDelete?: boolean;
   files: Array<{ name: string; content: string }>;
   description?: string;
   createdAt: number;

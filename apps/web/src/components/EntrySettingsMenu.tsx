@@ -1,3 +1,4 @@
+import { SHOW_LANGUAGE_SELECTOR } from '../product';
 import {
   useEffect,
   useRef,
@@ -137,7 +138,7 @@ export function EntrySettingsMenu({
           aria-label={t('entry.openSettingsTitle')}
           data-testid="entry-settings-menu"
         >
-          <section className="entry-settings-menu__section">
+          {SHOW_LANGUAGE_SELECTOR ? <><section className="entry-settings-menu__section">
             <div className="entry-settings-menu__section-title">
               <Icon name="languages" size={14} />
               <span>{t('settings.language')}</span>
@@ -215,7 +216,7 @@ export function EntrySettingsMenu({
             </div>
           </section>
 
-          <div className="entry-settings-menu__divider" aria-hidden />
+          <div className="entry-settings-menu__divider" aria-hidden /></> : null}
 
           <button
             type="button"

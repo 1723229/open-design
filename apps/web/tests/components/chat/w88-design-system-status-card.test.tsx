@@ -98,9 +98,9 @@ const D_WIDTH = 'min(280px, 100%)';
 /** design-qa.md:「状态卡最终边界为 280 × 67.98px」 */
 const D_QA_HEIGHT = 67.98;
 
-/** 稿子的文案,逐字。body-components.html:50-51 */
+/** 稿子的文案,仅适配产品品牌。body-components.html:50-51 */
 const D_TITLE = 'Creating design system workspace';
-const D_DETAIL = 'Open Design is using the setup sources to generate this project.';
+const D_DETAIL = 'NexusDesign is using the setup sources to generate this project.';
 
 /* ══ 量尺 ══════════════════════════════════════════════════════════════ */
 
@@ -271,7 +271,7 @@ describe('② 结构 —— icon + copy(strong + span)', () => {
     );
   });
 
-  it('英文原文逐字就是稿子那两句', () => {
+  it('英文文案沿用稿子并适配当前产品品牌', () => {
     const en = read('src/i18n/locales/en.ts');
     expect(en).toContain(`'chat.designSystemStatus.title': '${D_TITLE}'`);
     expect(en).toContain(`'chat.designSystemStatus.description': '${D_DETAIL}'`);

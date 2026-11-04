@@ -296,6 +296,9 @@ export function NewProjectPanel({
 }: Props) {
   const t = useT();
   const { locale } = useI18n();
+  const company = useCompany();
+  const visibleTabs = (Object.keys(TAB_LABEL_KEYS) as CreateTab[])
+    .filter((entry) => !company.enabled || (entry !== 'live-artifact' && entry !== 'media'));
   const analytics = useAnalytics();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [importing, setImporting] = useState(false);
@@ -308,7 +311,7 @@ export function NewProjectPanel({
   const [workingDirError, setWorkingDirError] = useState<
     { message: string; details?: string } | null
   >(null);
-  const [tab, setTab] = useState<CreateTab>(initialTab);
+  const [tab, setTab] = useState<CreateTab>(() => visibleTabs.includes(initialTab) ? initialTab : 'prototype');
   // P0 analytics — fire surface_view once per (panel mount, tab) pair so the
   // funnel sees both initial open and tab switches without double-counting on
   // unrelated re-renders. Ref keys on a tab string because the panel is a
@@ -855,6 +858,25 @@ export function NewProjectPanel({
     onImportFolderResponse,
   });
 
+  const projectOptions = <>
+    {tab === 'prototype' || tab === 'live-artifact' || tab === 'template' || tab === 'other' ? (
+      <>
+        <PlatformPicker value={platformTargets} onChange={setPlatformTargets} />
+        <SurfaceOptions
+          includeLandingPage={includeLandingPage}
+          includeOsWidgets={includeOsWidgets}
+          onIncludeLandingPage={setIncludeLandingPage}
+          onIncludeOsWidgets={setIncludeOsWidgets}
+        />
+      </>
+    ) : null}
+    {tab === 'prototype' ? <FidelityPicker value={fidelity} onChange={setFidelity} /> : null}
+    {tab === 'deck' ? (
+      <ToggleRow label={t('newproj.toggleSpeakerNotes')} hint={t('newproj.toggleSpeakerNotesHint')}
+        checked={speakerNotes} onChange={setSpeakerNotes} />
+    ) : null}
+  </>;
+
   return (
     <div className="newproj" data-testid="new-project-panel">
       <div className={`newproj-tabs-shell${tabScroll.left ? ' can-left' : ''}${tabScroll.right ? ' can-right' : ''}`}>
@@ -868,7 +890,7 @@ export function NewProjectPanel({
           <Icon name="chevron-left" size={16} strokeWidth={2} />
         </button>
         <div className="newproj-tabs" role="tablist" ref={tabsRef}>
-          {(Object.keys(TAB_LABEL_KEYS) as CreateTab[]).map((entry) => (
+          {visibleTabs.map((entry) => (
             <button
               key={entry}
               role="tab"
@@ -921,7 +943,9 @@ export function NewProjectPanel({
         ) : null}
 
         <div className="newproj-name-row">
+          {company.enabled ? <label className="newproj-label" htmlFor="new-project-name">{t('newproj.namePlaceholder')}</label> : null}
           <input
+            id="new-project-name"
             className="newproj-name"
             data-testid="new-project-name"
             placeholder={t('newproj.namePlaceholder')}
@@ -930,7 +954,7 @@ export function NewProjectPanel({
           />
         </div>
 
-        <div className="newproj-working-dir-row">
+        {!company.enabled ? <div className="newproj-working-dir-row">
           <button
             type="button"
             className={`ghost newproj-working-dir od-tooltip${workingDir ? ' picked' : ''}`}
@@ -961,9 +985,10 @@ export function NewProjectPanel({
               <Icon name="close" size={14} />
             </button>
           ) : null}
-        </div>
+        </div> : null}
 
         {showDesignSystemPicker ? (
+          <>
           <DesignSystemPicker
             designSystems={selectableDesignSystems}
             defaultDesignSystemId={defaultDesignSystemId}
@@ -973,6 +998,8 @@ export function NewProjectPanel({
             onChange={handleDesignSystemChange}
             loading={loading}
           />
+          {company.enabled ? <p className="platform-picker-hint">{t('newproj.designSystemHint')}</p> : null}
+          </>
         ) : null}
 
         {tab === 'media' ? (
@@ -1015,39 +1042,19 @@ export function NewProjectPanel({
           />
         ) : null}
 
-        {tab === 'prototype' || tab === 'live-artifact' || tab === 'template' || tab === 'other' ? (
-          <PlatformPicker value={platformTargets} onChange={setPlatformTargets} />
-        ) : null}
-
-        {tab === 'prototype' || tab === 'live-artifact' || tab === 'template' || tab === 'other' ? (
-          <SurfaceOptions
-            includeLandingPage={includeLandingPage}
-            includeOsWidgets={includeOsWidgets}
-            onIncludeLandingPage={setIncludeLandingPage}
-            onIncludeOsWidgets={setIncludeOsWidgets}
-          />
-        ) : null}
-
-        {/* Live artifact always renders at high fidelity — its whole point
-            is data-bound polished UI, so the wireframe option is hidden. */}
-        {tab === 'prototype' ? (
-          <FidelityPicker value={fidelity} onChange={setFidelity} />
-        ) : null}
+        {company.enabled ? (
+          <details className="newproj-options">
+            <summary>{t('newproj.moreOptions')}</summary>
+            <p className="platform-picker-hint">{t('newproj.optionsHint')}</p>
+            {projectOptions}
+          </details>
+        ) : projectOptions}
 
         {tab === 'live-artifact' ? (
           <ConnectorsSection
             connectors={connectors}
             loading={connectorsLoading}
             onOpenConnectorsTab={onOpenConnectorsTab}
-          />
-        ) : null}
-
-        {tab === 'deck' ? (
-          <ToggleRow
-            label={t('newproj.toggleSpeakerNotes')}
-            hint={t('newproj.toggleSpeakerNotesHint')}
-            checked={speakerNotes}
-            onChange={setSpeakerNotes}
           />
         ) : null}
 
@@ -1133,7 +1140,7 @@ export function NewProjectPanel({
               : t('newproj.create')}
           </span>
         </button>
-        {onImportClaudeDesign ? (
+        {!company.enabled && onImportClaudeDesign ? (
           <>
             <input
               ref={importInputRef}
@@ -1158,7 +1165,7 @@ export function NewProjectPanel({
             </button>
           </>
         ) : null}
-        {folderImport.available ? (
+        {!company.enabled && folderImport.available ? (
           <div className="newproj-open-folder">
             <button
               type="button"
@@ -1176,7 +1183,7 @@ export function NewProjectPanel({
           </div>
         ) : null}
       </div>
-      <div className="newproj-footer">{t('newproj.privacyFooter')}</div>
+      <div className="newproj-footer">{t(company.enabled ? 'newproj.managedFooter' : 'newproj.privacyFooter')}</div>
       {importZipError ? (
         <Toast
           message={importZipError.message}
@@ -1260,7 +1267,7 @@ function PlatformPicker({
       className={`newproj-section ds-picker platform-picker${open ? ' open' : ''}`}
       ref={wrapRef}
     >
-      <label className="newproj-label">Target platforms</label>
+      <label className="newproj-label">{t('newproj.targetPlatformsLabel')}</label>
       <button
         type="button"
         className={`ds-picker-trigger${open ? ' open' : ''}${primary ? '' : ' empty'}`}
@@ -1271,7 +1278,7 @@ function PlatformPicker({
       >
         <span className="ds-picker-meta">
           <span className="ds-picker-title">
-            {primary ? t(primary.labelKey) : 'Pick a platform'}
+            {primary ? t(primary.labelKey) : t('newproj.targetPlatformsLabel')}
             {extraCount > 0 ? (
               <span className="ds-picker-extra-pill">+{extraCount}</span>
             ) : null}
@@ -1289,7 +1296,7 @@ function PlatformPicker({
           className="ds-picker-popover"
           id={listboxId}
           role="listbox"
-          aria-label="Target platforms"
+          aria-label={t('newproj.targetPlatformsLabel')}
           aria-multiselectable="true"
         >
           <div className="ds-picker-list">
@@ -1747,7 +1754,7 @@ function TemplatePicker({
                 key={tpl.id}
                 active={value === tpl.id}
                 onClick={() => onChange(tpl.id)}
-                onDelete={onDelete ? () => setConfirmDelete({ id: tpl.id, name: tpl.name }) : () => {}}
+                onDelete={onDelete && tpl.canDelete !== false ? () => setConfirmDelete({ id: tpl.id, name: tpl.name }) : undefined}
                 name={tpl.name}
                 description={tpl.description ?? fallbackDesc}
               />
@@ -2096,7 +2103,7 @@ function TemplateOption({
 }: {
   active: boolean;
   onClick: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
   name: string;
   description: string;
 }) {
@@ -2114,7 +2121,7 @@ function TemplateOption({
           <span className="template-option-desc">{description}</span>
         </span>
       </button>
-      <button
+      {onDelete ? <button
         type="button"
         className="template-option-delete"
         onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -2122,7 +2129,7 @@ function TemplateOption({
         aria-label={`Delete template ${name}`}
       >
         ✕
-      </button>
+      </button> : null}
     </div>
   );
 }

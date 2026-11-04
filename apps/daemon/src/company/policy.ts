@@ -1,4 +1,5 @@
 import type { Request } from 'express';
+import { isDeepStrictEqual } from 'node:util';
 
 export interface CompanyRequestPolicy {
   allowed: boolean;
@@ -17,7 +18,7 @@ export function companyResourceRequest(req: Pick<Request,'path'>): boolean {
     || req.path === '/api/workspace/events';
 }
 
-export function companyMemberProjectPatchAllowed(value: unknown): boolean {
+export function companyMemberProjectPatchAllowed(value: unknown, currentMetadata?: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const body = value as Record<string, unknown>;
   if (Object.keys(body).some((key) => !['name', 'description', 'pinned', 'pendingPrompt', 'metadata','skillId','designSystemId'].includes(key))
@@ -26,20 +27,31 @@ export function companyMemberProjectPatchAllowed(value: unknown): boolean {
   if (!('metadata' in body)) return true;
   const metadata = body.metadata;
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false;
-  return Object.entries(metadata).every(([key, item]) => typeof item === 'string' && (
-    (key === 'kind' && ['prototype', 'deck', 'template', 'other', 'brand', 'image', 'video', 'audio'].includes(item))
-    || (key === 'nameSource' && ['generated', 'prompt', 'agent', 'user'].includes(item))
-  ));
+  const current = currentMetadata && typeof currentMetadata === 'object' && !Array.isArray(currentMetadata)
+    ? currentMetadata as Record<string, unknown> : {};
+  return Object.entries(metadata).every(([key, item]) => (
+    typeof item === 'string' && (
+      (key === 'kind' && ['prototype', 'deck', 'template', 'other', 'brand', 'image', 'video', 'audio'].includes(item))
+      || (key === 'nameSource' && ['generated', 'prompt', 'agent', 'user'].includes(item))
+    )
+  ) || (Object.hasOwn(current, key) && isDeepStrictEqual(current[key], item)));
 }
 
 /** Members receive an explicit product surface; new endpoints stay administrator-only. */
-export function companyMemberPolicy(req: Request, resolveRunProjectId?: (runId: string) => string | null): CompanyRequestPolicy {
+export function companyMemberPolicy(req: Request, resolveRunProjectId?: (runId: string) => string | null, resolveSnapshotProjectId?: (snapshotId: string) => string | null, resolveProjectMetadata?: (projectId: string) => unknown): CompanyRequestPolicy {
   const pathname = req.path;
   if(req.method==='GET' && pathname==='/api/company/tasks') return {allowed:true,write:false};
   const write = companyRequestIsWrite(req);
   const deny = { allowed: false, write };
   const global = { allowed: true, write };
+  const snapshot = /^\/api\/applied-plugins\/([^/]+)(?:\/canon)?$/u.exec(pathname);
+  if (snapshot && !write) {
+    const projectId = resolveSnapshotProjectId?.(decodeURIComponent(snapshot[1]!));
+    return projectId ? { allowed: true, projectId, write: false } : deny;
+  }
   if (pathname.startsWith('/api/company/')) return global; // Domain router enforces administration/sharing rules.
+  // The company resource adapter checks the template's source project.
+  if (/^\/api\/templates(?:\/[^/]+)?$/u.test(pathname) && ['GET', 'HEAD', 'POST', 'DELETE'].includes(req.method)) return global;
   if (companyResourceRequest(req)) return global; // The resource adapter verifies scope; original resource routes enforce ownership.
   if (pathname === '/api/projects' && ['GET', 'HEAD', 'POST'].includes(req.method)) {
     if (req.method === 'POST') {
@@ -62,6 +74,7 @@ export function companyMemberPolicy(req: Request, resolveRunProjectId?: (runId: 
   if (project) {
     const projectId = decodeURIComponent(project[1]!);
     const rest = project[2] ?? '';
+    if (rest === 'applied-plugins') return !write ? { allowed: true, projectId, write: false } : deny;
     if (write && /^conversations\/[^/]+\/comments(?:\/(?!pull$)[^/]+(?:\/(?:anchor|reorder))?)?$/u.test(rest)) {
       return {allowed:true,projectId,write:false,comment:true};
     }
@@ -75,7 +88,7 @@ export function companyMemberPolicy(req: Request, resolveRunProjectId?: (runId: 
     if (!/^(?:|duplicate|files(?:\/.*)?|raw\/.*|powered\/.*|text-preview\/.*|preview(?:\/.*)?|preview-url|folders|search|tabs|conversations(?:\/.*)?|submissions|events|workspace-artifacts\/[^/]+|chat-artifact-snapshots\/[^/]+(?:\/(?:content|thumbnail))?|comments\/read|design-token-suggestions|critique\/[^/]+\/(?:artifact|interrupt))$/u.test(rest)) return deny;
     if (!rest && req.method === 'PATCH') {
       // Arbitrary project metadata carries host paths, runtime settings, and instructions.
-      if (!companyMemberProjectPatchAllowed(req.body)) return deny;
+      if (!companyMemberProjectPatchAllowed(req.body, resolveProjectMetadata?.(projectId))) return deny;
     }
     return { allowed: true, projectId, write: rest === 'tabs' || rest === 'comments/read' ? false : write, ...(!rest && req.method === 'DELETE' ? { ownerOnly: true } : {}) };
   }

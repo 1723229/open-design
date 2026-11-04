@@ -29,6 +29,7 @@ import { tr } from './locales/tr';
 import { th } from './locales/th';
 import { it } from './locales/it';
 import { getOpenDesignHost } from '@open-design/host';
+import { DEFAULT_UI_LOCALE } from '../product';
 import { LOCALES, type Dict, type Locale } from './types';
 
 export { LOCALES, LOCALE_LABEL } from './types';
@@ -210,7 +211,7 @@ export function isRtlLocale(locale: Locale): boolean {
 }
 
 export function I18nProvider({ initial, children }: ProviderProps) {
-  const [locale, setLocaleState] = useState<Locale>(() => initial ?? detectInitialLocale());
+  const [locale, setLocaleState] = useState<Locale>(() => initial ?? DEFAULT_UI_LOCALE);
 
   // Keep <html lang="…" dir="…"> in sync so screen readers and CSS hooks
   // pick the right language token and direction without each component
@@ -223,7 +224,20 @@ export function I18nProvider({ initial, children }: ProviderProps) {
     }
   }, [locale]);
 
+  // This distribution has a fixed Chinese UI. Remove preferences saved by an
+  // earlier multilingual build so they cannot reappear if storage is reused.
+  useEffect(() => {
+    if (initial !== undefined) return;
+    try {
+      window.localStorage.removeItem(LS_KEY);
+      window.localStorage.removeItem(LS_SOURCE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, [initial]);
+
   const setLocale = useCallback((next: Locale) => {
+    if (initial === undefined) return;
     setLocaleState(next);
     try {
       window.localStorage.setItem(LS_KEY, next);
@@ -233,7 +247,7 @@ export function I18nProvider({ initial, children }: ProviderProps) {
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [initial]);
 
   const t = useCallback(
     (key: DictKey, vars?: Record<string, string | number>): string => {

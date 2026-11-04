@@ -3,7 +3,7 @@
   "specVersion": "1.0.0",
   "name": "od-next-strategy",
   "title": "OD Next Strategy V2",
-  "version": "3.3.8",
+  "version": "3.3.9",
   "publishedAt": "2026-08-14T10:44:00Z",
   "description": "Bundled, inactive OD Next planning and Build strategy content.",
   "license": "MIT",
@@ -37,17 +37,17 @@
       "assets": {
         "core": {
           "path": "./assets/core-system-prompt.md",
-          "version": "3.2.0"
+          "version": "3.2.1"
         },
         "orchestration": {
           "path": "./assets/general-orchestration.md",
-          "version": "3.2.0"
+          "version": "3.2.1"
         },
         "taskProfiles": [
           {
             "taskType": "prototype",
             "path": "./assets/task-profiles/prototype.md",
-            "version": "3.1.10",
+            "version": "3.1.11",
             "rollout": "active",
             "projectKinds": [
               "prototype"
@@ -74,7 +74,7 @@
           {
             "taskType": "ppt",
             "path": "./assets/task-profiles/ppt.md",
-            "version": "3.1.0",
+            "version": "3.1.1",
             "rollout": "active",
             "projectKinds": [
               "deck"
@@ -83,7 +83,7 @@
           {
             "taskType": "marketing",
             "path": "./assets/task-profiles/marketing.md",
-            "version": "2.0.4",
+            "version": "2.0.5",
             "rollout": "active",
             "projectKinds": [
               "image"
@@ -92,7 +92,7 @@
           {
             "taskType": "hyperframes",
             "path": "./assets/task-profiles/hyperframes.md",
-            "version": "3.1.0",
+            "version": "3.1.1",
             "rollout": "active",
             "projectKinds": [
               "video"
@@ -109,11 +109,11 @@
             "resources": [
               {
                 "path": "./assets/task-profiles/prototype.md",
-                "version": "3.1.9"
+                "version": "3.1.10"
               },
               {
                 "path": "./assets/task-profiles/ppt.md",
-                "version": "3.1.0"
+                "version": "3.1.1"
               },
               {
                 "path": "./assets/task-profiles/document.md",
@@ -129,7 +129,7 @@
               },
               {
                 "path": "./assets/task-profiles/hyperframes.md",
-                "version": "3.1.0"
+                "version": "3.1.1"
               },
               {
                 "path": "./assets/task-profiles/webgl.md",
@@ -165,14 +165,14 @@
               },
               {
                 "path": "./assets/task-profiles/motion-design.md",
-                "version": "1.3.2"
+                "version": "1.3.3"
               }
             ]
           },
           {
             "taskType": "motion-design",
             "path": "./assets/task-profiles/motion-design.md",
-            "version": "1.3.2",
+            "version": "1.3.3",
             "rollout": "active",
             "projectKinds": [
               "video"

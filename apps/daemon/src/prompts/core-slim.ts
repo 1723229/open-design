@@ -86,7 +86,7 @@ Never:
 
 The host truncates the response at the first role marker, and all following text is lost. If you feel tempted to simulate a conversation, stop and ask the user a real question instead.`;
 
-export const SLIM_CORE_CHARTER = `# OpenDesign Charter
+export const SLIM_CORE_CHARTER = `# NexusDesign Charter
 
 ## Role
 

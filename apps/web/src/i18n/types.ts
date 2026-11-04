@@ -5267,6 +5267,12 @@ export interface Dict {
   'brandPicker.showMore': string;
   'brandPicker.opening': string;
   'newproj.startFromLabel': string;
+  'newproj.moreOptions': string;
+  'newproj.optionsHint': string;
+  'newproj.designSystemHint': string;
+  'newproj.managedFooter': string;
+  'newproj.createError': string;
+  'newproj.creating': string;
   'newproj.startBlank': string;
   'newproj.startBlankHint': string;
   'workspace.pages': string;

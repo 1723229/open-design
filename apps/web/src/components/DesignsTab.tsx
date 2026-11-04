@@ -463,15 +463,6 @@ export function DesignsTab({
 		});
 	}, [projects, liveArtifactsByProject, filter, sub]);
 
-	const filteredProjects = useMemo(
-		() =>
-			filtered.filter(
-				(item): item is Extract<DesignListItem, { type: "project" }> =>
-					item.type === "project",
-			),
-		[filtered],
-	);
-
 	const skillName = (id: string | null) =>
 		skills.find((s) => s.id === id)?.name ?? "";
 	const dsName = (id: string | null) =>
@@ -1121,7 +1112,7 @@ export function DesignsTab({
 			) : (
 				<div className="design-kanban-board">
 					{STATUS_ORDER.map((status) => {
-						const colProjects = filteredProjects.filter(
+						const colItems = filtered.filter(
 							(item) =>
 								normalizeStatus(item.project.status?.value ?? "not_started") ===
 								status,
@@ -1131,66 +1122,84 @@ export function DesignsTab({
 								<div className="design-kanban-header">
 									<span>{statusLabel(status, t)}</span>
 									<span className="design-kanban-count">
-										{colProjects.length}
+										{colItems.length}
 									</span>
 								</div>
 								<div className="design-kanban-list">
-									{colProjects.length === 0 ? (
+									{colItems.length === 0 ? (
 										<div className="design-kanban-empty">
 											{t("designs.kanbanEmptyColumn")}
 										</div>
 									) : (
-										colProjects.map(({ project: p }) => {
+										colItems.map((item) => {
+											const p = item.project;
+											const artifact = item.type === "live-artifact" ? item.liveArtifact : null;
+											const title = artifact ? liveArtifactCardTitle(p, artifact) : p.name;
+											const projectStatus = p.status?.value ?? "not_started";
+											const openItem = () => artifact ? onOpenLiveArtifact(p.id, artifact.id) : onOpen(p.id);
 											const skill = skillName(p.skillId);
 											const ds = dsName(resolveProjectDesignSystemId(p));
-											const designSystemProject = isDesignSystemProject(p);
+											const designSystemProject = !artifact && isDesignSystemProject(p);
+											const publishedDesignSystem = !artifact && isPublishedDesignSystemProject(p, designSystems);
 											return (
 												<div
-													key={p.id}
-													className={`design-kanban-card status-${status}${designSystemProject ? " is-design-system-project" : ""}`}
+													key={artifact ? `live:${artifact.id}` : p.id}
+													className={`design-kanban-card status-${projectStatus}${designSystemProject ? " is-design-system-project" : ""}`}
 													role="button"
 													tabIndex={0}
-													onClick={() => onOpen(p.id)}
+													onClick={openItem}
 													onKeyDown={(e) => {
-														if (e.key === "Enter" || e.key === " ") {
+														if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
 															e.preventDefault();
-															onOpen(p.id);
+															openItem();
 														}
 													}}
 												>
 													<button
+														type="button"
 														className="design-card-close"
-														title={t("designs.deleteTitle")}
-														aria-label={t("designs.deleteAria", {
+														title={t(artifact ? "common.delete" : "designs.deleteTitle")}
+														aria-label={artifact ? `${t("common.delete")} ${artifact.title}` : t("designs.deleteAria", {
 															name: p.name,
 														})}
+														disabled={artifact ? p.companyAccess?.canWrite === false : p.companyAccess?.canManage === false}
 														onClick={(e) => {
 															e.stopPropagation();
-															handleDeleteProject(p);
+															if (artifact) void handleDeleteLiveArtifact(p.id, artifact);
+															else handleDeleteProject(p);
 														}}
 													>
 														<Icon name="close" size={14} />
 													</button>
 													<div
 														className="design-kanban-card-name"
-														title={p.name}
+														title={title}
 													>
-														{p.name}
+														{title}
 													</div>
 													{designSystemProject ? (
 														<div className="design-card-tag-row">
 															<DesignSystemProjectTag />
 														</div>
 													) : null}
+													{artifact ? (
+														<LiveArtifactBadges status={artifact.status} refreshStatus={artifact.refreshStatus} compact />
+													) : (
+														<span className={`design-card-status design-card-status-${publishedDesignSystem ? "published" : projectStatus}`}>
+															{publishedDesignSystem ? t("designs.status.published") : statusLabel(projectStatus, t)}
+														</span>
+													)}
 													<div className="design-kanban-card-meta">
-														{ds ? (
+														{artifact ? (
+															<><span className="ds">{liveArtifactCardMetaLead(p, artifact)}</span>{" · "}{artifactStatusLabel(artifact.status, artifact.refreshStatus, t)}</>
+														) : ds ? (
 															<span className="ds">{ds}</span>
 														) : (
 															<span>{t("designs.cardFreeform")}</span>
 														)}
-														{skill ? ` · ${skill}` : ""}
+														{!artifact && skill ? ` · ${skill}` : ""}
 														{sub === "recent" || sub === "yours"
-															? ` · ${relativeTime(p.updatedAt, t)}`
+															? ` · ${relativeTime(item.updatedAt, t)}`
 															: ""}
 													</div>
 												</div>

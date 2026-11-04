@@ -29,13 +29,28 @@ it('switches spaces from the sidebar menu without saving configuration', async (
 it('shows inherited external membership with no local editing controls', async () => {
   window.history.replaceState({},'', '/teams/business');
   vi.stubGlobal('fetch',vi.fn(async (url: string) => Response.json(url.endsWith('/business')
-    ? {team,members:[{userId:'alice',username:'Alice',role:'viewer'}]} : {teams:[team]})));
+    ? {team,members:[{userId:'alice',username:'alice',displayName:'项目成员',role:'viewer'}]} : {teams:[team]})));
   render(<I18nProvider initial="en"><CompanyTeamsSwitcher /></I18nProvider>);
   fireEvent.click(screen.getByTestId('workspace-switcher'));
   fireEvent.click(await screen.findByRole('menuitem',{name:'Team members'}));
-  expect(await screen.findByText('Alice')).toBeTruthy();
+  expect(await screen.findByText('项目成员（alice）')).toBeTruthy();
   expect(screen.getByRole('link',{name:'Manage in source platform'}).getAttribute('href')).toBe(team.sourceUrl);
   expect(screen.queryByRole('button',{name:'Add member'})).toBeNull();
+});
+
+it('shows real names in local team permissions and member choices', async () => {
+  window.history.replaceState({}, '', '/teams/business');
+  const local = { ...team, source: 'local', canManage: true, canWrite: true, role: 'owner' };
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => Response.json(url === '/api/company/users'
+    ? { users: [{ id: 'chen-user', username: 'chenxy', displayName: '陈晓芸', disabled: false }] }
+    : url.endsWith('/business') ? { team: local, members: [{ userId: 'li-user', username: 'liym', displayName: '李元明', role: 'editor' }] }
+    : { teams: [local] })));
+  render(<I18nProvider initial="en"><CompanyTeamsSwitcher /></I18nProvider>);
+  fireEvent.click(screen.getByTestId('workspace-switcher'));
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Team members' }));
+  expect(await screen.findByText('李元明（liym）')).toBeTruthy();
+  expect(screen.getByRole('combobox', { name: '李元明（liym） Permission' })).toBeTruthy();
+  expect(await screen.findByRole('option', { name: '陈晓芸（chenxy）' })).toHaveValue('chen-user');
 });
 
 it('keeps an unavailable team selected and disables stale write authority on refresh failure', async () => {

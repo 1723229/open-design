@@ -131,6 +131,39 @@ presentation: { show_agent_identity: false, hidden_settings_sections: [labs, int
 });
 
 describe('company authentication and project ACL', () => {
+  it.each([undefined, '', '   ', 'liym', ' LIYM '])('preserves a real name when a directory refresh supplies %j', async displayName => {
+    const runtime = await initializeCompany({ ...fixture(), config });
+    const original = runtime.store.upsertLdapUser({ entryUUID: 'name-id', username: 'liym', displayName: '李元明' });
+    const refreshed = runtime.store.upsertLdapUser({ entryUUID: 'name-id', username: 'liym', ...(displayName !== undefined ? { displayName } : {}) });
+    expect(refreshed).toMatchObject({ id: original.id, username: 'liym', displayName: '李元明' });
+  });
+
+  it('updates a real name and login name without changing the directory identity', async () => {
+    const runtime = await initializeCompany({ ...fixture(), config });
+    const original = runtime.store.upsertLdapUser({ entryUUID: 'name-id', username: 'liym', displayName: '李元明' });
+    expect(runtime.store.upsertLdapUser({ entryUUID: 'name-id', username: 'li.ym', displayName: ' 李明 ' }))
+      .toMatchObject({ id: original.id, username: 'li.ym', displayName: '李明' });
+  });
+
+  it('returns names through login, session, user directory and project membership', async () => {
+    const runtime = await initializeCompany({ ...fixture(), config: { ...config, auth: { mode: 'ldap' } },
+      ldap: { authenticate: async () => ({ entryUUID: 'name-id', username: 'liym', displayName: 'liym' }), recheck: async () => true },
+    });
+    const owner = runtime.store.upsertLdapUser({ entryUUID: 'name-id', username: 'liym', displayName: '李元明' });
+    runtime.registerProjectOwner('name-project', owner);
+    const base = await start(runtime);
+    const loggedIn = await login(base, 'liym', 'test-password');
+    expect(loggedIn.response.status).toBe(200);
+    expect(loggedIn.body.user).toMatchObject({ id: owner.id, username: 'liym', displayName: '李元明' });
+    const headers = { cookie: loggedIn.cookie };
+    expect(await fetch(`${base}/api/company/session`, { headers }).then(r => r.json()))
+      .toMatchObject({ user: { displayName: '李元明' } });
+    expect(await fetch(`${base}/api/company/users`, { headers }).then(r => r.json()))
+      .toMatchObject({ users: expect.arrayContaining([expect.objectContaining({ id: owner.id, displayName: '李元明' })]) });
+    expect(await fetch(`${base}/api/company/projects/name-project/members`, { headers }).then(r => r.json()))
+      .toMatchObject({ members: [{ userId: owner.id, username: 'liym', displayName: '李元明', role: 'owner' }] });
+  });
+
   it('bootstraps once, forces password change and never stores plaintext passwords', async () => {
     const deps = fixture();
     const runtime = await initializeCompany({ ...deps, config });

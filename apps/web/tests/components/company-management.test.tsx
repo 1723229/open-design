@@ -1,13 +1,51 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { CompanyUsersDialog, CompanySharingDialog, CompanyMemberSettings } from '../../src/company/CompanyControls';
+import { CompanyAccountMenu, CompanyUsersDialog, CompanySharingDialog, CompanyMemberSettings } from '../../src/company/CompanyControls';
+import { CompanyProvider } from '../../src/company/CompanyProvider';
 import { I18nProvider } from '../../src/i18n';
 import { copyToClipboard } from '../../src/lib/copy-to-clipboard';
 
 vi.mock('../../src/lib/copy-to-clipboard', () => ({ copyToClipboard: vi.fn() }));
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.mocked(copyToClipboard).mockReset(); });
+
+it('shows the real name and account in the account menu', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ enabled: true,
+    user: { id: 'liym', username: 'liym', displayName: '李元明', role: 'member', mustChangePassword: false },
+    csrfToken: 'test-csrf', presentation: { showAgentIdentity: false, hiddenSettingsSections: [] },
+  })));
+  render(<I18nProvider initial="en"><CompanyProvider><CompanyAccountMenu /></CompanyProvider></I18nProvider>);
+  fireEvent.click(await screen.findByRole('button', { name: '李元明（liym）' }));
+  expect(screen.getByRole('menu', { name: '李元明（liym）' })).toBeTruthy();
+});
+
+it('shows names in user management and falls back to accounts without repeating them', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ users: [
+    { id: 'liym', username: 'liym', displayName: '李元明', role: 'member', disabled: false },
+    { id: 'admin', username: 'admin', role: 'admin', disabled: false },
+    { id: 'dev', username: 'dev', displayName: ' DEV ', role: 'member', disabled: false },
+  ] })));
+  render(<I18nProvider initial="en"><CompanyUsersDialog currentUserId="admin" onClose={() => {}} /></I18nProvider>);
+  expect(await screen.findByText('李元明（liym）')).toBeTruthy();
+  expect(screen.getByText('admin')).toBeTruthy();
+  expect(screen.getByText('dev')).toBeTruthy();
+  expect(screen.getByRole('combobox', { name: 'Permission: 李元明（liym）' })).toBeTruthy();
+});
+
+it('shows names in project members and invitations while submitting immutable user IDs', async () => {
+  const fetcher = vi.fn(async (url: string, _init?: RequestInit) => Response.json(url === '/api/company/users'
+    ? { users: [{ id: 'chen-user', username: 'chenxy', displayName: '陈晓芸', disabled: false }] }
+    : { members: [{ userId: 'li-user', username: 'liym', displayName: '李元明', role: 'owner' }], canManage: true }));
+  vi.stubGlobal('fetch', fetcher);
+  render(<I18nProvider initial="en"><CompanySharingDialog projectId="design" onClose={() => {}} /></I18nProvider>);
+  expect(await screen.findByText('李元明（liym）')).toBeTruthy();
+  expect(await screen.findByRole('option', { name: '陈晓芸（chenxy）' })).toBeTruthy();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Member' }), { target: { value: 'chen-user' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
+  await waitFor(() => expect(fetcher.mock.calls.some(([url, init]) => url === '/api/company/projects/design/members'
+    && init?.method === 'PUT' && JSON.parse(String(init.body)).userId === 'chen-user')).toBe(true));
+});
 
 it('copies the exact artifact link while retaining project-member authorization', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({ members: [{ userId: 'owner', username: 'Owner', role: 'owner' }], canManage: false })));
@@ -24,7 +62,7 @@ it('keeps the link selectable and reports a failed clipboard operation honestly'
   render(<I18nProvider initial="en"><CompanySharingDialog projectId="project-1" onClose={() => {}} /></I18nProvider>);
   fireEvent.click(await screen.findByRole('button', { name: 'Copy share link' }));
   expect(await screen.findByText('Could not copy automatically. Please manually copy the link above.')).toBeTruthy();
-  expect(screen.getByRole('textbox').getAttribute('readonly')).not.toBeNull();
+  expect(screen.getByText(`${window.location.origin}/projects/project-1`)).toBeVisible();
 });
 
 it('lists and disables a company user through the administrator API', async () => {
@@ -66,10 +104,11 @@ it('allows owners to add a viewer and remove a project member', async () => {
   vi.stubGlobal('fetch', fetchMock);
   render(<I18nProvider initial="en"><CompanySharingDialog projectId="project-1" onClose={() => {}} /></I18nProvider>);
   await screen.findByRole('button', { name: 'Add member' });
-  fireEvent.change(screen.getByLabelText('Member'), { target: { value: 'alice' } });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Member' }), { target: { value: 'alice' } });
   fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
   await screen.findByRole('button', { name: 'Remove' });
   expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/company/projects/project-1/members' && init?.method === 'PUT' && JSON.parse(String(init.body)).role === 'viewer')).toBe(true);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Remove' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
   await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/company/projects/project-1/members/alice' && init?.method === 'DELETE')).toBe(true));
 });

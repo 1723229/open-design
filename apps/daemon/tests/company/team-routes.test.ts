@@ -49,7 +49,9 @@ it('authenticates signed snapshots independently of cookies and rejects replay',
 
 it('binds a one-time login to the browser, source, team and immutable LDAP identity', async () => {
   const f = await fixture();
-  const response = await f.signed('/api/company/integrations/source/teams', f.snapshot);
+  const response = await f.signed('/api/company/integrations/source/teams', {
+    ...f.snapshot, members: f.snapshot.members.map(member => ({ ...member, displayName: '项目成员' })),
+  });
   const {team} = await response.json() as {team: {id: string}};
   const start = await fetch(f.base + '/api/company/integrations/source/start?namespace=instance&externalId=business', {redirect: 'manual'});
   expect(start.status).toBe(302);
@@ -67,6 +69,7 @@ it('binds a one-time login to the browser, source, team and immutable LDAP ident
   expect((await fetch(url, {headers: {cookie}, redirect: 'manual'})).status).toBe(403);
   const alice = f.runtime.store.findUser('alice')!;
   expect(alice.role).toBe('member');
+  expect(alice.displayName).toBe('项目成员');
   expect(f.runtime.store.teams.role(team.id, alice.id)).toBe('viewer');
   const sessionCookie=callback.headers.get('set-cookie')!.split(';')[0]!;
   const originalToken=sessionCookie.split('=')[1]!;

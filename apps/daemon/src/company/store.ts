@@ -141,13 +141,17 @@ export class CompanyStore {
   upsertLdapUser(identity: LdapIdentity): CompanyUser {
     if (!identity.entryUUID || !identity.username || identity.username.toLowerCase() === 'admin') throw new Error('Invalid directory identity');
     const existing = this.database.prepare('SELECT * FROM company_users WHERE entry_uuid=? AND source=\'ldap\'').get(identity.entryUUID) as UserRow | undefined;
+    // Directory login and external team sync share this path; account placeholders must not erase a real name.
+    const incomingName = identity.displayName?.trim();
+    const displayName = incomingName && ![identity.username, existing?.username].some(username => username?.toLowerCase() === incomingName.toLowerCase())
+      ? incomingName : existing?.display_name ?? null;
     if (existing) {
-      this.database.prepare('UPDATE company_users SET username=?,display_name=? WHERE id=?').run(identity.username, identity.displayName ?? null, existing.id);
+      this.database.prepare('UPDATE company_users SET username=?,display_name=? WHERE id=?').run(identity.username, displayName, existing.id);
       return this.getUser(existing.id)!;
     }
     const id = randomUUID();
     this.database.prepare(`INSERT INTO company_users (id,username,source,entry_uuid,display_name,role,created_at) VALUES (?,?,'ldap',?,?,'member',?)`)
-      .run(id, identity.username, identity.entryUUID, identity.displayName ?? null, this.now());
+      .run(id, identity.username, identity.entryUUID, displayName, this.now());
     return this.getUser(id)!;
   }
 
@@ -238,8 +242,9 @@ export class CompanyStore {
   members(projectId: string): CompanyProjectMember[] {
     const teamId = this.teams.projectTeamId(projectId);
     if (teamId) return this.teams.members(teamId).map(member => ({...member, role: member.role === 'admin' ? 'owner' : member.role}));
-    return this.database.prepare(`SELECT m.user_id AS userId,u.username,m.role FROM company_project_members m
-      JOIN company_users u ON u.id=m.user_id WHERE m.project_id=? ORDER BY u.username`).all(projectId) as CompanyProjectMember[];
+    const rows = this.database.prepare(`SELECT m.user_id AS userId,u.username,u.display_name AS displayName,m.role FROM company_project_members m
+      JOIN company_users u ON u.id=m.user_id WHERE m.project_id=? ORDER BY u.username`).all(projectId) as Array<Omit<CompanyProjectMember, 'displayName'> & { displayName: string | null }>;
+    return rows.map(({ displayName, ...member }) => ({ ...member, ...(displayName ? { displayName } : {}) }));
   }
 
   setMember(projectId: string, userId: string, role: CompanyProjectRole, actorId: string): void {

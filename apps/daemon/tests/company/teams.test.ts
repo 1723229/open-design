@@ -15,6 +15,15 @@ function fixture() {
 }
 
 describe('native and linked team ownership', () => {
+  it('returns display names for team members and inherited project participants', () => {
+    const { store, owner } = fixture();
+    store.upsertLdapUser({ entryUUID: 'owner', username: 'owner', displayName: '项目负责人' });
+    const team = store.teams.create('Review team', owner);
+    store.teams.attach('design', team.id, owner);
+    expect(store.teams.members(team.id)).toEqual([{ userId: owner.id, username: 'owner', displayName: '项目负责人', role: 'owner' }]);
+    expect(store.members('design')).toEqual([{ userId: owner.id, username: 'owner', displayName: '项目负责人', role: 'owner' }]);
+  });
+
   it('moves personal ownership into a team and restores the original owner without restoring old grants', () => {
     const {store, owner, editor, viewer} = fixture();
     const team = store.teams.create('Review team', owner);

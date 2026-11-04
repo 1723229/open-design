@@ -13,6 +13,7 @@ import { ShareErrorRow } from '../components/share/ShareErrorRow';
 import { ShareButton } from '../components/share/ShareButton';
 import styles from './company.module.css';
 import {CompanyTasksDialog} from './CompanyTasksDialog';
+import { companyUserLabel } from './user-label';
 
 export function CompanyAccountMenu() {
   const company = useCompany();
@@ -33,8 +34,8 @@ export function CompanyAccountMenu() {
   }, [open]);
   if (!company.enabled || !company.user) return null;
   return <div className={styles.account} ref={ref}>
-    <Button ref={trigger} variant="ghost" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>{company.user.username}</Button>
-    {open && <div className={styles.menu} role="menu" aria-label={company.user.username}>
+    <Button ref={trigger} variant="ghost" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>{companyUserLabel(company.user)}</Button>
+    {open && <div className={styles.menu} role="menu" aria-label={companyUserLabel(company.user)}>
       <Button variant="ghost" role="menuitem" onClick={()=>{setDialog('tasks');setOpen(false);}}>{t('company.tasks')}</Button>
       {company.user.role === 'admin' && <Button variant="ghost" role="menuitem" onClick={() => { setDialog('users'); setOpen(false); }}>{t('company.users')}</Button>}
       {route.kind === 'project' && <Button variant="ghost" role="menuitem" onClick={() => { setDialog('sharing'); setOpen(false); }}>{t('company.sharing')}</Button>}
@@ -90,10 +91,10 @@ export function CompanyUsersDialog({ currentUserId, onClose, allowCreate = false
     {error && <p role="alert">{t('company.loadError')} <Button onClick={() => setAttempt(value => value + 1)}>{t('company.retry')}</Button></p>}
     {!users && !error && <p role="status">{t('common.loading')}</p>}
     <div className={styles.rows}>{users?.map(user => <div className={styles.row} key={user.id}>
-      <span>{user.username}</span>
+      <span>{companyUserLabel(user)}</span>
       {user.id === currentUserId || user.username.toLowerCase() === 'admin'
         ? <span>{t(user.role === 'admin' ? 'company.admin' : 'company.member')}</span>
-        : <select aria-label={`${t('company.role')}: ${user.username}`} value={user.role} disabled={busy} onChange={event => { void updateUser(user.id, { role: event.target.value as 'admin' | 'member' }); }}>
+        : <select aria-label={`${t('company.role')}: ${companyUserLabel(user)}`} value={user.role} disabled={busy} onChange={event => { void updateUser(user.id, { role: event.target.value as 'admin' | 'member' }); }}>
           <option value="member">{t('company.member')}</option><option value="admin">{t('company.admin')}</option>
         </select>}
       <span>{t(user.disabled ? 'company.disabled' : 'company.enabled')}</span>
@@ -174,9 +175,9 @@ export function CompanySharingDialog({ projectId, fileName, onClose }: { project
       <section className={styles.shareMembers} aria-label={t('company.member')}>
       {membership.team && <p className={styles.shareTeam}>{t('company.inheritedTeam')} <a href={buildPath({kind:'home',view:'projects',companyTeamId:membership.team.id})}>{membership.team.name}</a></p>}
       {membership.members.map(member => <div className={styles.shareMember} key={member.userId}>
-      <span>{member.username}</span>
+      <span>{companyUserLabel(member)}</span>
       {canManage && member.role !== 'owner' ? <>
-        <select aria-label={`${member.username} ${t('company.role')}`} value={member.role} disabled={busy} onChange={event => { void mutate(member.userId, event.target.value as 'viewer' | 'editor'); }}>
+        <select aria-label={`${companyUserLabel(member)} ${t('company.role')}`} value={member.role} disabled={busy} onChange={event => { void mutate(member.userId, event.target.value as 'viewer' | 'editor'); }}>
           <option value="viewer">{t('company.viewer')}</option><option value="editor">{t('company.editor')}</option>
         </select>
         <Button variant="ghost" disabled={busy} onClick={() => { void mutate(member.userId); }}>{t('company.removeMember')}</Button>
@@ -184,7 +185,7 @@ export function CompanySharingDialog({ projectId, fileName, onClose }: { project
       </div>)}
       </section>
       {canManage && <form className={styles.shareInvite} onSubmit={event => { event.preventDefault(); if (userId) void mutate(userId, role); }}>
-        <label>{t('company.member')}<select value={userId} required disabled={busy} onChange={event => setUserId(event.target.value)}><option value="">{t('company.selectUser')}</option>{users.filter(user => !user.disabled && !membership.members.some(member => member.userId === user.id)).map(user => <option key={user.id} value={user.id}>{user.username}</option>)}</select></label>
+        <label>{t('company.member')}<select value={userId} required disabled={busy} onChange={event => setUserId(event.target.value)}><option value="">{t('company.selectUser')}</option>{users.filter(user => !user.disabled && !membership.members.some(member => member.userId === user.id)).map(user => <option key={user.id} value={user.id}>{companyUserLabel(user)}</option>)}</select></label>
         <label>{t('company.role')}<select value={role} disabled={busy} onChange={event => setRole(event.target.value as 'viewer' | 'editor')}><option value="viewer">{t('company.viewer')}</option><option value="editor">{t('company.editor')}</option></select></label>
         <ShareButton variant="primary" hoverLighten={false} type="submit" disabled={busy || !userId} aria-busy={busy}>{t('company.addMember')}</ShareButton>
       </form>}

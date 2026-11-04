@@ -7,6 +7,7 @@ import { companyRequest, useCompany } from './CompanyProvider';
 import { EntryWorkspaceSwitcher } from '../components/EntryWorkspaceSwitcher';
 import { Icon } from '../components/Icon';
 import styles from './company.module.css';
+import { companyUserLabel } from './user-label';
 
 export function CompanyTeamsSwitcher({onTeamResolved}: {onTeamResolved?: (team: CompanyTeam | null) => void}) {
   const company = useCompany(), t = useT(), route = useRoute();
@@ -79,16 +80,16 @@ function CompanyTeamDialog({teamId,onClose,onCreated}: {teamId?:string;onClose:(
     </form> : data ? <h3>{data.team.name}</h3> : <p role="status">{t('common.loading')}</p>}
     {data?.team.source==='external' && <p>{t('company.inheritedTeam')} {data.team.sourceUrl && <a href={data.team.sourceUrl} target="_blank" rel="noopener noreferrer">{t('company.manageAtSource')}</a>}</p>}
     <div className={styles.rows}>{data?.members.map(member=><div className={styles.row} key={member.userId}>
-      <span>{member.username}</span>
+      <span>{companyUserLabel(member)}</span>
       {editable && member.role!=='owner' ? <>
-        <select aria-label={`${member.username} ${t('company.role')}`} value={member.role} disabled={busy} onChange={event=>{void mutate(`${path}/members`,'PUT',{userId:member.userId,role:event.target.value});}}>
+        <select aria-label={`${companyUserLabel(member)} ${t('company.role')}`} value={member.role} disabled={busy} onChange={event=>{void mutate(`${path}/members`,'PUT',{userId:member.userId,role:event.target.value});}}>
           <option value="admin">{t('company.admin')}</option><option value="editor">{t('company.editor')}</option><option value="viewer">{t('company.viewer')}</option>
         </select>
         <Button variant="ghost" disabled={busy} onClick={()=>{void mutate(`${path}/members/${encodeURIComponent(member.userId)}`,'DELETE');}}>{t('company.removeMember')}</Button>
       </> : <span>{t(`company.${member.role}`)}</span>}
     </div>)}</div>
     {editable && <form className={styles.sharing} onSubmit={event=>{event.preventDefault();void mutate(`${path}/members`,'PUT',{userId,role});}}>
-      <label>{t('company.member')}<select value={userId} required onChange={event=>setUserId(event.target.value)}><option value="">{t('company.selectUser')}</option>{users.filter(user=>!user.disabled && !data.members.some(member=>member.userId===user.id)).map(user=><option key={user.id} value={user.id}>{user.username}</option>)}</select></label>
+      <label>{t('company.member')}<select value={userId} required onChange={event=>setUserId(event.target.value)}><option value="">{t('company.selectUser')}</option>{users.filter(user=>!user.disabled && !data.members.some(member=>member.userId===user.id)).map(user=><option key={user.id} value={user.id}>{companyUserLabel(user)}</option>)}</select></label>
       <label>{t('company.role')}<select value={role} onChange={event=>setRole(event.target.value as Exclude<CompanyTeamRole,'owner'>)}><option value="editor">{t('company.editor')}</option><option value="viewer">{t('company.viewer')}</option><option value="admin">{t('company.admin')}</option></select></label>
       <Button type="submit" disabled={busy || !userId}>{t('company.addMember')}</Button>
     </form>}

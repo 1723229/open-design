@@ -107,8 +107,9 @@ export class CompanyTeams {
     return row;
   }
   members(id: string): CompanyTeamMember[] {
-    return this.store.database.prepare(`SELECT m.user_id AS userId,u.username,m.role FROM company_team_members m
-      JOIN company_users u ON u.id=m.user_id WHERE m.team_id=? ORDER BY u.username`).all(id) as CompanyTeamMember[];
+    const rows = this.store.database.prepare(`SELECT m.user_id AS userId,u.username,u.display_name AS displayName,m.role FROM company_team_members m
+      JOIN company_users u ON u.id=m.user_id WHERE m.team_id=? ORDER BY u.username`).all(id) as Array<Omit<CompanyTeamMember, 'displayName'> & { displayName: string | null }>;
+    return rows.map(({ displayName, ...member }) => ({ ...member, ...(displayName ? { displayName } : {}) }));
   }
   setMember(id: string, userId: string, role: Exclude<CompanyTeamRole, 'owner'>, actor: CompanyUser): void {
     this.editable(id, actor);

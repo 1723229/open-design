@@ -88,7 +88,7 @@ export async function initializeCompany(options: InitializeCompanyOptions): Prom
     enabled: config.enabled,
     teamsEnabled: config.enabled && config.teams?.enabled === true,
     ...(config.enabled ? { authMode: config.auth.mode } : {}),
-    user: session ? { id: session.user.id, username: session.user.username, role: session.user.role, mustChangePassword: session.user.mustChangePassword } : null,
+    user: session ? { id: session.user.id, username: session.user.username, ...(session.user.displayName ? { displayName: session.user.displayName } : {}), role: session.user.role, mustChangePassword: session.user.mustChangePassword } : null,
     presentation: config.presentation,
     ...(session ? { csrfToken: session.csrfToken } : {}),
   });

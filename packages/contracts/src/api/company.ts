@@ -6,6 +6,7 @@ export type CompanyProjectRole = 'owner' | 'editor' | 'viewer';
 export interface CompanySessionUser {
   id: string;
   username: string;
+  displayName?: string;
   role: CompanyRole;
   mustChangePassword: boolean;
 }
@@ -13,7 +14,6 @@ export interface CompanySessionUser {
 export interface CompanyUser extends CompanySessionUser {
   source: 'local' | 'ldap';
   disabled: boolean;
-  displayName?: string;
 }
 
 export interface CompanyPresentation {
@@ -35,7 +35,7 @@ export interface CompanyPasswordRequest { currentPassword: string; newPassword: 
 export interface CompanyUsersResponse { users: CompanyUser[] }
 export interface CompanyUserUpdateRequest { role?: CompanyRole; disabled?: boolean }
 export interface CompanyCreateLocalUserRequest { username: string; password: string; role?: CompanyRole }
-export interface CompanyProjectMember { userId: string; username: string; role: CompanyProjectRole }
+export interface CompanyProjectMember { userId: string; username: string; displayName?: string; role: CompanyProjectRole }
 export interface CompanyProjectAccess { canWrite: boolean; canComment: boolean; canManage: boolean; ownerUserId: string | null }
 export interface CompanyProjectMembersResponse { members: CompanyProjectMember[]; canManage: boolean; team?: CompanyTeam; canWrite?: boolean; canComment?: boolean; ownerUserId?: string | null }
 export interface CompanyProjectMemberRequest { userId: string; role: CompanyProjectRole }
@@ -62,7 +62,7 @@ export interface CompanyTeam {
   sourceUrl?: string;
   confirmedAt?: number;
 }
-export interface CompanyTeamMember { userId: string; username: string; role: CompanyTeamRole }
+export interface CompanyTeamMember { userId: string; username: string; displayName?: string; role: CompanyTeamRole }
 export interface CompanyTeamsResponse { teams: CompanyTeam[] }
 export interface CompanyTeamResponse { team: CompanyTeam; members: CompanyTeamMember[] }
 export interface CompanyTeamCreateRequest { name: string }

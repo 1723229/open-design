@@ -65,6 +65,12 @@ async function login(base: string, username: string, password: string) {
 }
 
 describe('company startup config', () => {
+  it.each([['60', 60], ['600', 600], [undefined, 60]] as const)('loads integration skew %s', (value, expected) => {
+    expect(loadCompanyConfig(fixture().dataRoot, { OD_COMPANY_INTEGRATION_SKEW_SECONDS: value }).integrationSkewSeconds).toBe(expected);
+  });
+  it.each(['', '59', '601', '60.5', '60.0', '1e2', 'NaN', 'Infinity', '-60', ' 60 ', '60seconds'])('rejects invalid integration skew %j during configuration startup', value => {
+    expect(() => loadCompanyConfig(fixture().dataRoot, { OD_COMPANY_INTEGRATION_SKEW_SECONDS: value })).toThrow(/OD_COMPANY_INTEGRATION_SKEW_SECONDS/);
+  });
   it('allows scoped preview assets without cookies only while their owner session remains authorized', async () => {
     const state=fixture(); let ownerKey='';
     const runtime=await initializeCompany({...state,config,resolvePreviewOwner:req=>req.path==='/api/projects/p/preview/cap/style.css'?{projectId:'p',ownerKey}:null});

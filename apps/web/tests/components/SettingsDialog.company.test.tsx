@@ -17,6 +17,7 @@ let calls: { path: string; body: Record<string, unknown> }[];
 let conflict: string | undefined;
 let storedKeys: Record<string, string>;
 let probeError: boolean;
+let catalogModels: ((body: Record<string, unknown>) => string[]) | undefined;
 let pending: { path: string; promise: Promise<void>; release: () => void } | undefined;
 const persisted = vi.fn();
 const drafts = vi.fn();
@@ -28,7 +29,7 @@ function defer(path: string) {
 beforeEach(() => {
   persisted.mockClear(); drafts.mockClear(); calls = []; conflict = undefined; pending = undefined;
   storedKeys = { p1: 'responses-key', p2: 'claude-key' };
-  probeError = false;
+  probeError = false; catalogModels = undefined;
   state = {
     revision: 7,
     providers: [
@@ -46,7 +47,7 @@ beforeEach(() => {
     if (init?.method) calls.push({ path: url, body });
     if (pending && url.endsWith(pending.path)) await pending.promise;
     if (conflict && url.endsWith(conflict)) return Response.json({ error: 'Settings changed; retry', code: 'revision_conflict' }, { status: 409 });
-    if (url.endsWith('/catalog')) return Response.json({ models: ['gpt-original', 'gpt-alternative', 'claude-original'] });
+    if (url.endsWith('/catalog')) return Response.json({ models: catalogModels?.(body) ?? ['gpt-original', 'gpt-alternative', 'claude-original'] });
     if (url.endsWith('/providers')) {
       const index = state.providers.findIndex(p => p.id === body.id);
       const value = { ...(state.providers[index] ?? state.providers[0]), ...body, id: body.id ?? 'p3', revision: 3, capabilities: [], hasApiKey: true };
@@ -91,6 +92,48 @@ function model(value: string) {
   if (!known) fireEvent.change(screen.getByLabelText('Custom model id'), { target: { value } });
 }
 const mutations = (suffix: string) => calls.filter(c => c.path.endsWith(suffix));
+
+it('discovers first-time custom models without choosing, saving or activating a model', async () => {
+  state.providers = []; state.active = null;
+  catalogModels = () => ['discovered-model'];
+  await open(); api(); custom('OpenAI');
+  fireEvent.change(screen.getByLabelText('Base URL'), { target: { value: 'https://first.example/v1' } });
+  key('first-key'); fireEvent.blur(screen.getByLabelText('API key'));
+  await waitFor(() => expect(mutations('/catalog').at(-1)?.body).toEqual({ baseUrl: 'https://first.example/v1', apiKey: 'first-key', protocol: 'openai' }));
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 600)); });
+  expect(mutations('/providers')).toHaveLength(0);
+  expect(mutations('/test')).toHaveLength(0);
+  expect(mutations('/activate')).toHaveLength(0);
+  fireEvent.click(screen.getByRole('combobox', { name: 'Model' }));
+  fireEvent.click(screen.getByRole('option', { name: /discovered-model/ }));
+  await waitFor(() => expect(mutations('/providers').at(-1)?.body.models).toEqual(['discovered-model']));
+  expect(mutations('/activate')).toHaveLength(0);
+});
+
+it('does not overwrite another provider form with an earlier catalog response', async () => {
+  catalogModels = body => body.protocol === 'anthropic' ? ['new-claude-model'] : ['old-gpt-model'];
+  const request = defer('/catalog');
+  await open(); api();
+  await waitFor(() => expect(mutations('/catalog')).toHaveLength(1));
+  custom('Anthropic');
+  await waitFor(() => expect(mutations('/catalog')).toHaveLength(2));
+  await act(async () => request.release());
+  await waitFor(() => expect(screen.getByText(/Loaded 1 model/)).toBeTruthy());
+  fireEvent.click(screen.getByRole('combobox', { name: 'Model' }));
+  expect(screen.getByRole('option', { name: /new-claude-model/ })).toBeTruthy();
+  expect(screen.queryByRole('option', { name: /old-gpt-model/ })).toBeNull();
+  expect(mutations('/providers')).toHaveLength(0);
+});
+
+it('keeps manual model input available for an empty catalog without saving discovery', async () => {
+  catalogModels = () => [];
+  await open(); api();
+  await waitFor(() => expect(mutations('/catalog')).toHaveLength(1));
+  await screen.findByText(/No compatible text models were returned/);
+  model('manual-model');
+  await waitFor(() => expect(mutations('/providers').at(-1)?.body.models).toContain('manual-model'));
+  expect(mutations('/activate')).toHaveLength(0);
+});
 
 it('makes the effective Agent and provider explicit in both tabs while drafts leave the status unchanged', async () => {
   state.active!.baseUrl = 'https://effective-relay.example/v1';

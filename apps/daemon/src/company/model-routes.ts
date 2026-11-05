@@ -32,7 +32,7 @@ export function registerCompanyModelRoutes(app: Express, deps: {
         let resource: string;
         if (operation === 'catalog') {
           const catalog = await deps.models.catalog(req.body);
-          deps.company.store.audit(deps.company.getUser(req)!.id, 'models.provider.catalog', req.body.providerId);
+          deps.company.store.audit(deps.company.getUser(req)!.id, 'models.provider.catalog', req.body.providerId ?? 'unsaved');
           return res.json(catalog);
         }
         const installedAgents = await agents();

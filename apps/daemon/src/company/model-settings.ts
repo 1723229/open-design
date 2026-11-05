@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { AppConfigPrefs } from '../app-config.js';
 import type { CompanyProviderDeleteRequest, CompanyModelAgent, CompanyModelRoute, CompanyModelProvider, CompanyModelSettingsResponse, CompanyActiveModel, CompanyProviderSaveRequest, CompanyProviderTestRequest, CompanyProviderModelsRequest, CompanyProviderModelsResponse, CompanyModelActivateRequest } from '@open-design/contracts';
-import { catalogModels, probeModel, type ProbeRequest } from './model-probe.js';
+import { catalogModels, CompanyModelCatalogError, probeModel, type ProbeRequest } from './model-probe.js';
 import { companyCapabilitySupportsAgent } from '@open-design/contracts';
 
 export const COMPANY_MODEL_AGENTS: Omit<CompanyModelAgent, 'installed'>[] = [
@@ -118,11 +118,34 @@ export class CompanyModelSettings {
     this.state.revision++; this.persist(); return this.view();
   }
   async catalog(request: CompanyProviderModelsRequest): Promise<CompanyProviderModelsResponse> {
-    this.reload(); const p = this.provider(request.providerId);
-    const active = this.state.active;
-    const protocol = request.protocol ?? p.apiProtocol ?? ((active?.providerId === p.id ? active.protocol : p.capabilities.find(c => c.status === 'supported')?.protocol) === 'anthropic-messages' ? 'anthropic' : 'openai');
-    try { return await catalogModels({ baseUrl: p.baseUrl, apiKey: p.apiKey, protocol, apiVersion: request.apiVersion, fetchImpl: this.options.fetchImpl, timeoutMs: this.options.probeTimeoutMs }); }
-    catch { return fail(502, 'catalog_unavailable', 'Provider model catalog is unavailable; enter model IDs manually.'); }
+    this.reload();
+    const hasProvider = typeof request.providerId === 'string' && request.providerId.trim().length > 0;
+    const hasDraftFields = request.baseUrl !== undefined || request.apiKey !== undefined;
+    let baseUrl: string;
+    let apiKey: string;
+    let protocol = request.protocol;
+    if (hasProvider) {
+      const provider = this.provider(request.providerId!.trim());
+      if (request.apiKey !== undefined && typeof request.apiKey !== 'string') fail(400, 'catalog_parameters_incomplete', 'API key must be a string.');
+      baseUrl = request.baseUrl === undefined ? provider.baseUrl : normalizeUrl(request.baseUrl);
+      apiKey = request.apiKey?.trim() || provider.apiKey;
+      const active = this.state.active;
+      protocol ??= provider.apiProtocol ?? ((active?.providerId === provider.id ? active.protocol : provider.capabilities.find(c => c.status === 'supported')?.protocol) === 'anthropic-messages' ? 'anthropic' : 'openai');
+    } else {
+      if (!hasDraftFields || typeof request.baseUrl !== 'string' || !request.baseUrl.trim() || typeof request.apiKey !== 'string' || !request.apiKey.trim() || !protocol) {
+        fail(400, 'catalog_parameters_incomplete', 'Complete the provider URL, protocol and API key before fetching models.');
+      }
+      baseUrl = normalizeUrl(request.baseUrl);
+      apiKey = request.apiKey.trim();
+    }
+    if (!protocol || typeof protocol !== 'string') fail(400, 'catalog_parameters_incomplete', 'Complete the provider URL, protocol and API key before fetching models.');
+    if (!apiKey) fail(400, 'catalog_parameters_incomplete', 'Complete the provider URL, protocol and API key before fetching models.');
+    try {
+      return await catalogModels({ baseUrl, apiKey, protocol, apiVersion: request.apiVersion, fetchImpl: this.options.fetchImpl, timeoutMs: this.options.probeTimeoutMs });
+    } catch (error) {
+      if (error instanceof CompanyModelCatalogError) fail(error.status, error.code, error.message);
+      throw error;
+    }
   }
   activate(request: CompanyModelActivateRequest, agents: CompanyModelAgent[]): CompanyModelSettingsResponse {
     this.check(request.expectedRevision); const p = this.provider(request.providerId);

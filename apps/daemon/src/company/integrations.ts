@@ -24,6 +24,8 @@ export function createCompanyIntegrationRoutes(deps: {
   const {config, store, auth, now} = deps;
   const router = Router();
   if (!config.enabled || !config.teams?.enabled || !config.integrations?.length) return router;
+  const signatureWindowMs = (config.integrationSkewSeconds ?? 60) * 1000;
+  const nonceRetentionMs = 2 * signatureWindowMs + 60_000;
   store.database.exec(`
     CREATE TABLE IF NOT EXISTS company_integration_flows (
       state TEXT PRIMARY KEY, client_id TEXT NOT NULL, namespace TEXT NOT NULL, external_id TEXT NOT NULL,
@@ -73,12 +75,12 @@ export function createCompanyIntegrationRoutes(deps: {
         return void res.redirect(302,`/teams/${encodeURIComponent(flow.team_id)}`);
       }
       const timestamp = req.get('x-nexus-timestamp') ?? '', nonce = req.get('x-nexus-nonce') ?? '', signature = req.get('x-nexus-signature') ?? '';
-      if (!/^\d{13}$/u.test(timestamp) || Math.abs(now()-Number(timestamp)) > 60_000 || !/^[A-Za-z0-9_-]{16,128}$/u.test(nonce) || !/^[a-f0-9]{64}$/u.test(signature)) return void fail(res,403,'Invalid integration signature');
+      if (!/^\d{13}$/u.test(timestamp) || Math.abs(now()-Number(timestamp)) > signatureWindowMs || !/^[A-Za-z0-9_-]{16,128}$/u.test(nonce) || !/^[a-f0-9]{64}$/u.test(signature)) return void fail(res,403,'Invalid integration signature');
       // The wire body is JSON.stringify(parsed JSON), allowing ordinary Express JSON middleware.
       const body = req.method === 'GET' ? '' : JSON.stringify(req.body ?? null);
       const expected = createHmac('sha256',client.secret).update(`${req.method}\n${req.originalUrl}\n${timestamp}\n${nonce}\n${hash(body)}`).digest('hex');
       if (!constantEqual(signature,expected)) return void fail(res,403,'Invalid integration signature');
-      try { store.database.prepare('INSERT INTO company_integration_nonces VALUES (?,?,?)').run(client.id,nonce,now()+300_000); }
+      try { store.database.prepare('INSERT INTO company_integration_nonces VALUES (?,?,?)').run(client.id,nonce,now()+nonceRetentionMs); }
       catch { return void fail(res,403,'Integration request already consumed'); }
       if (operation === 'teams' && req.method === 'GET') return void res.json({mappings:store.teams.mappings(client.id)});
       if (operation === 'teams') {

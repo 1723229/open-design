@@ -101,6 +101,8 @@ const USAGE = `Usage:
   od company team member-remove <teamId> <userId> [--json]
   od company models list [--json]
   od company models provider-save|provider-delete|test|activate|catalog --prompt-file <path|-> [--json]
+    catalog accepts either {"providerId":"...","protocol":"openai"} or
+    {"baseUrl":"https://...","protocol":"openai","apiKey":"..."}; the latter is read-only.
 
 All commands accept --daemon-url <url>. Login/password also accept --prompt-file <path|->
 containing the corresponding JSON request body. Passwords are never accepted as arguments.

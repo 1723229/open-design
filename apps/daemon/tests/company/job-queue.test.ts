@@ -52,16 +52,16 @@ describe('company logical turn queue', () => {
     for (let user = 0; user < 4; user++) expect(q.list(`u${user}`).filter(j => j.state === 'running')).toHaveLength(3);
   });
 
-  it('admits twelve projects for one user and leaves the thirteenth queued', () => {
-    const q = queue({ global: 12, perUser: 12, perProject: 1 });
-    const jobs = Array.from({ length: 13 }, (_, n) => q.enqueue({
+  it('admits a configured global capacity above twelve', () => {
+    const q = queue({ global: 16, perUser: 16, perProject: 1 });
+    const jobs = Array.from({ length: 17 }, (_, n) => q.enqueue({
       userId: 'a', projectId: `p${n}`, clientRequestId: `${n}`, payload: {},
     }).job);
-    for (const job of jobs.slice(0, 12)) expect(q.claimNext()?.id).toBe(job.id);
+    for (const job of jobs.slice(0, 16)) expect(q.claimNext()?.id).toBe(job.id);
     expect(q.claimNext()).toBeNull();
-    expect(q.get(jobs[12]!.id)?.state).toBe('queued');
+    expect(q.get(jobs[16]!.id)?.state).toBe('queued');
     q.finish(jobs[0]!.id, 'completed');
-    expect(q.claimNext()?.id).toBe(jobs[12]!.id);
+    expect(q.claimNext()?.id).toBe(jobs[16]!.id);
   });
 
   it('serializes a project even with spare global and user capacity', () => {
@@ -93,7 +93,6 @@ describe('company logical turn queue', () => {
 
   it.each([
     { global: 0, perUser: 1, perProject: 1 },
-    { global: 13, perUser: 1, perProject: 1 },
     { global: 2.5, perUser: 1, perProject: 1 },
     { global: NaN, perUser: 1, perProject: 1 },
     { global: Infinity, perUser: 1, perProject: 1 },
@@ -163,13 +162,13 @@ describe('company logical turn queue', () => {
     expect(q.list('b')).toEqual([]);
   });
 
-  it('allows an explicit twelve-slot rollout while retaining user and project serialization', () => {
+  it('allows a configured global limit above twelve while retaining validation', () => {
     const db = new DatabaseSync(':memory:');
     databases.push(db);
     expect(() => new CompanyJobQueue(db, { global: 0, perUser: 1, perProject: 1 })).toThrow();
-    const q = new CompanyJobQueue(db, { global: 12, perUser: 1, perProject: 1 });
-    for (let n = 0; n < 13; n++) q.enqueue({ userId: `u${n}`, projectId: `p${n}`, clientRequestId: `${n}`, payload: {} });
-    for (let n = 0; n < 12; n++) expect(q.claimNext()).not.toBeNull();
+    const q = new CompanyJobQueue(db, { global: 16, perUser: 1, perProject: 1 });
+    for (let n = 0; n < 17; n++) q.enqueue({ userId: `u${n}`, projectId: `p${n}`, clientRequestId: `${n}`, payload: {} });
+    for (let n = 0; n < 16; n++) expect(q.claimNext()).not.toBeNull();
     expect(q.claimNext()).toBeNull();
   });
 });

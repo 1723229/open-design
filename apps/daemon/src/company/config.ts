@@ -28,6 +28,7 @@ export interface CompanyConfig {
   presentation: CompanyPresentation;
   teams?: { enabled: boolean };
   integrations?: Array<{ id: string; authorizeUrl: string; secret: string }>;
+  integrationSkewSeconds?: number;
 }
 
 function object(value: unknown): Record<string, unknown> {
@@ -59,9 +60,14 @@ function timeout(value: unknown): number {
 
 /** Read only from the daemon's already resolved data root. */
 export function loadCompanyConfig(dataRoot: string, env: Record<string, string | undefined> = process.env): CompanyConfig {
+  const skew = env.OD_COMPANY_INTEGRATION_SKEW_SECONDS ?? '60';
+  if (!/^\d+$/u.test(skew) || Number(skew) < 60 || Number(skew) > 600) {
+    throw new Error('OD_COMPANY_INTEGRATION_SKEW_SECONDS must be an integer from 60 to 600');
+  }
+  const integrationSkewSeconds = Number(skew);
   const file = path.join(dataRoot, 'company.yaml');
   const disabled: CompanyConfig = {
-    enabled: false, publicOrigin: '', auth: { mode: 'local' },
+    enabled: false, publicOrigin: '', auth: { mode: 'local' }, integrationSkewSeconds,
     presentation: { showAgentIdentity: true, hiddenSettingsSections: [] },
   };
   if (!existsSync(file)) return disabled;
@@ -84,7 +90,7 @@ export function loadCompanyConfig(dataRoot: string, env: Record<string, string |
   const hidden = presentation.hidden_settings_sections ?? ['labs', 'integrations'];
   if (!Array.isArray(hidden) || hidden.some((item) => typeof item !== 'string')) throw new Error('Invalid company hidden_settings_sections');
   const result: CompanyConfig = {
-    enabled: true, publicOrigin: origin.origin, auth: { mode },
+    enabled: true, publicOrigin: origin.origin, auth: { mode }, integrationSkewSeconds,
     presentation: { showAgentIdentity: presentation.show_agent_identity === true, hiddenSettingsSections: hidden as string[] },
   };
   const teams = object(input.teams);

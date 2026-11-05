@@ -1,5 +1,5 @@
 import { SHOW_LANGUAGE_SELECTOR, SHOW_OFFICIAL_CLOUD, SHOW_UPSTREAM_LINKS } from '../product';
-import { useCompany } from '../company/CompanyProvider';
+import { CompanyRequestError, useCompany } from '../company/CompanyProvider';
 import { CompanyMemberSettings } from '../company/CompanyControls';
 import { companyGeneralConfig, companyProviderUrl, useCompanyModelSettings } from '../company/useCompanyModelSettings';
 import companyStyles from '../company/company.module.css';
@@ -2831,23 +2831,22 @@ function AdministratorSettingsDialog({
     options: { silent?: boolean; trigger?: 'auto' | 'manual' } = {},
   ) => {
     if (company.enabled) {
-      if (!companyProviderDraftValidRef.current) return;
       const request = ++companyCatalogRequestRef.current;
-      let cacheKey = providerModelsKey;
+      const cacheKey = providerModelsKey;
       const started = performance.now();
       setProviderModelsState({ status: 'running', cacheKey });
       try {
-        const value = await companyModels.catalog(saved => {
-          cacheKey = `company:${saved.id}:${apiProtocol}:${saved.baseUrl}`;
-        });
+        const value = await companyModels.catalog();
         if (companyCatalogRequestRef.current !== request) return;
         if (!value) { setProviderModelsState({ status: 'idle' }); return; }
         const models = value.models.map(id => ({ id, label: id }));
         activeSetProviderModelsCache(previous => ({ ...previous, [cacheKey]: models }));
-        setProviderModelsState({ status: 'done', cacheKey, result: { ok: true, kind: 'success', latencyMs: Math.round(performance.now() - started), models } });
+        setProviderModelsState({ status: 'done', cacheKey, result: { ok: models.length > 0, kind: models.length > 0 ? 'success' : 'no_models', latencyMs: Math.round(performance.now() - started), models } });
       } catch (reason) {
         if (companyCatalogRequestRef.current !== request) return;
-        setProviderModelsState({ status: 'done', cacheKey, result: { ok: false, kind: 'unknown', latencyMs: 0, detail: String(reason instanceof Error ? reason.message : reason) } });
+        const code = reason instanceof CompanyRequestError ? reason.code : undefined;
+        const kind = code === 'catalog_auth_failed' ? 'auth_failed' : code === 'catalog_network_error' ? 'upstream_unavailable' : 'unknown';
+        setProviderModelsState({ status: 'done', cacheKey, result: { ok: false, kind, latencyMs: 0, detail: String(reason instanceof Error ? reason.message : reason) } });
       }
       return;
     }
@@ -3709,7 +3708,7 @@ function AdministratorSettingsDialog({
   );
   const providerModelsKey = useMemo(
     () => company.enabled
-      ? `company:${companyModels.providerId}:${apiProtocol}:${cfg.baseUrl}`
+      ? `company:${companyModels.providerId}:${providerModelsCacheKey(apiProtocol, cfg.baseUrl, cfg.apiKey, cfg.apiVersion ?? '')}`
       : providerModelsCacheKey(apiProtocol, cfg.baseUrl, cfg.apiKey, cfg.apiVersion ?? ''),
     [company.enabled, companyModels.providerId, apiProtocol, cfg.baseUrl, cfg.apiKey, cfg.apiVersion],
   );
@@ -3739,6 +3738,8 @@ function AdministratorSettingsDialog({
     [fetchedApiModelOptions],
   );
   const pendingProviderModelReconciliation = (() => {
+    // Discovery must not choose or persist an unconfirmed company model.
+    if (company.enabled) return null;
     if (cfg.mode !== 'api' || apiModelCustomEditing) return null;
     if (apiModelUserSelectedRef.current) return null;
     if (fetchedApiModelOptions.length === 0) return null;
@@ -3912,7 +3913,7 @@ function AdministratorSettingsDialog({
     currentProviderModelsResult?.ok === false && !apiKeyAuthFailed
       ? t('settings.fetchModelsFailed', {
           detail:
-            currentProviderModelsResult.detail ||
+            (currentProviderModelsResult.kind === 'no_models' ? t('settings.fetchModelsEmpty') : currentProviderModelsResult.detail) ||
             currentProviderModelsResult.kind,
         })
       : null;

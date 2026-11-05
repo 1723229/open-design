@@ -20,6 +20,13 @@ const CompanyContext = createContext({
 });
 export const useCompany = () => useContext(CompanyContext);
 
+export class CompanyRequestError extends Error {
+  constructor(message: string, public readonly code?: string, public readonly status?: number) {
+    super(message);
+    this.name = 'CompanyRequestError';
+  }
+}
+
 function readCompanySession(value: CompanySessionResponse): CompanySessionResponse {
   if (!value || typeof value.enabled !== 'boolean' || !value.presentation
     || typeof value.presentation.showAgentIdentity !== 'boolean' || !Array.isArray(value.presentation.hiddenSettingsSections)
@@ -33,7 +40,7 @@ function readCompanySession(value: CompanySessionResponse): CompanySessionRespon
 export async function companyRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
   const body = await response.json();
-  if (!response.ok) throw new Error(typeof body.error === 'string' ? body.error : 'Request failed');
+  if (!response.ok) throw new CompanyRequestError(typeof body.error === 'string' ? body.error : 'Request failed', typeof body.code === 'string' ? body.code : undefined, response.status);
   return body as T;
 }
 

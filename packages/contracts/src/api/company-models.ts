@@ -89,11 +89,18 @@ export interface CompanyModelActivateRequest {
   protocol?: CompanyModelProtocol;
 }
 export interface CompanyProviderModelsRequest {
-  providerId: string;
-  /** Original provider form protocol. Defaults to the active/verified provider protocol. */
+  /** Existing provider identity. Omit this for an unsaved, read-only catalog request. */
+  providerId?: string;
+  /** Optional read-only URL override for a saved provider, or draft URL when unsaved. */
+  baseUrl?: string;
+  apiKey?: string;
+  /** Original provider form protocol. Required for unsaved requests. */
   protocol?: ProviderModelsRequest['protocol'];
   apiVersion?: string;
 }
-export interface CompanyProviderModelsResponse { models: string[] }
+export interface CompanyProviderModelsResponse {
+  models: string[];
+  status?: 'ok' | 'empty';
+}
 
 export interface CompanyProviderDeleteRequest { expectedRevision: number }

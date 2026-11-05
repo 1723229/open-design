@@ -38,6 +38,22 @@ async function endpoint(handler: express.Express) {
 }
 
 describe('company CLI credentials', () => {
+  it('passes an unsaved catalog request through the shared company endpoint', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'od-model-catalog-cli-'));
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    const file = path.join(root, 'catalog.json');
+    writeFileSync(file, JSON.stringify({ baseUrl: 'https://api.example/v1', protocol: 'openai', apiKey: 'PRIVATE' }));
+    const requests: unknown[] = [];
+    const app = express(); app.use(express.json());
+    app.get('/api/company/session', (_req, res) => res.json({ enabled: true, user: { id: 'admin' }, csrfToken: 'csrf' }));
+    app.post('/api/company/models/catalog', (req, res) => { requests.push(req.body); res.json({ models: ['m'], status: 'ok' }); });
+    const daemonUrl = await endpoint(app); const output: string[] = [];
+    expect(await runCompanyCli(['models', 'catalog', '--prompt-file', file, '--daemon-url', daemonUrl, '--json'], { env: { OD_COMPANY_SESSION: 'a'.repeat(43) }, stdout: value => output.push(value) })).toBe(0);
+    expect(requests[0]).toEqual({ baseUrl: 'https://api.example/v1', protocol: 'openai', apiKey: 'PRIVATE' });
+    expect(JSON.parse(output.join(''))).toEqual({ models: ['m'], status: 'ok' });
+    expect(output.join('')).not.toContain('PRIVATE');
+  });
+
   it('uses the shared model management endpoints and file input without exposing keys', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'od-model-cli-'));
     cleanup.push(() => rmSync(root, { recursive: true, force: true }));

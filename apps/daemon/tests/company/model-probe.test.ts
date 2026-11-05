@@ -61,7 +61,7 @@ describe('protocol capability probes', () => {
       res.end(JSON.stringify(protocol === 'anthropic' ? { data: [{ id: 'claude-model', display_name: 'Claude' }] }
         : { models: [{ name: 'models/gemini-model', displayName: 'Gemini', supportedGenerationMethods: ['generateContent'] }] }));
     });
-    expect(await catalogModels({ baseUrl, apiKey: 'private', protocol })).toEqual({ models: [protocol === 'anthropic' ? 'claude-model' : 'gemini-model'] });
+    expect(await catalogModels({ baseUrl, apiKey: 'private', protocol })).toEqual({ models: [protocol === 'anthropic' ? 'claude-model' : 'gemini-model'], status: 'ok' });
   });
   it('bounds model catalog reads without Content-Length and cancels hanging bodies', async () => {
     let flood = false;
@@ -136,7 +136,7 @@ describe('protocol capability probes', () => {
       res.writeHead(valid ? 200 : 401, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ data: [{ id: 'm' }] }));
     });
-    expect(await catalogModels({ baseUrl, apiKey: 'private' })).toEqual({ models: ['m'] });
+    expect(await catalogModels({ baseUrl, apiKey: 'private' })).toEqual({ models: ['m'], status: 'ok' });
   });
   it('proves protocol-specific streamed function calls including argument fragments', async () => {
     const baseUrl = await upstream((url, body, res) => {
@@ -215,7 +215,7 @@ describe('protocol capability probes', () => {
       res.writeHead(fail ? 401 : 200, { 'content-type': 'application/json' });
       res.end(fail ? 'private-key' : JSON.stringify({ data: [{ id: ' manual ' }, { id: 'manual' }, { id: '\nsecret' }, { id: 2 }] }));
     });
-    expect(await catalogModels({ baseUrl, apiKey: 'private' })).toEqual({ models: ['manual'] });
+    expect(await catalogModels({ baseUrl, apiKey: 'private' })).toEqual({ models: ['manual'], status: 'ok' });
     fail = true; await expect(catalogModels({ baseUrl, apiKey: 'private' })).rejects.toThrow(/catalog/i);
   });
 });

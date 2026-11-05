@@ -46,6 +46,12 @@ export function useCompanyModelSettings(enabled: boolean, cfg: AppConfig, setCfg
   if (draft.current.cfg !== cfg || draft.current.providerId !== providerId) draft.current = { cfg, providerId };
   const writes = useRef(Promise.resolve());
   const saving = useRef<{ owner: typeof draft.current; promise: Promise<CompanyModelProvider | null> }>();
+  const catalogSequence = useRef(0);
+  const catalogAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    catalogSequence.current++;
+    catalogAbort.current?.abort();
+  }, [cfg, providerId, enabled]);
   const selectedModel = (config: AppConfig) => config.mode === 'api' ? config.model.trim() : (config.agentModels?.[config.agentId ?? '']?.model ?? config.model).trim();
   function formProtocol(config: AppConfig, provider?: CompanyModelProvider): CompanyModelProtocol | undefined {
     const protocols = state.current?.agents.find(a => a.id === config.agentId)?.protocols.filter(protocol => config.mode !== 'api'
@@ -192,19 +198,29 @@ export function useCompanyModelSettings(enabled: boolean, cfg: AppConfig, setCfg
       return { ok: false, kind: 'unknown', model, latencyMs: Math.round(performance.now() - started), detail: reason instanceof Error ? reason.message : String(reason) };
     }
   }
-  async function catalog(onSaved: (provider: CompanyModelProvider) => void) {
+  async function catalog() {
     const owner = draft.current;
+    const sequence = ++catalogSequence.current;
+    catalogAbort.current?.abort();
+    const controller = new AbortController();
+    catalogAbort.current = controller;
     try {
-      const saved = await save(owner);
-      if (!saved || draft.current !== owner) return null;
-      onSaved(saved);
+      const config = owner.cfg;
+      const saved = state.current?.providers.find(provider => provider.id === owner.providerId);
+      const protocol = config.apiProtocol === 'ollama' ? 'openai' : config.apiProtocol;
+      const body = saved
+        ? { providerId: saved.id, ...(companyProviderUrl(config.baseUrl) !== companyProviderUrl(saved.baseUrl) ? { baseUrl: config.baseUrl.trim() } : {}), ...(config.apiKey.trim() ? { apiKey: config.apiKey.trim() } : {}), ...(protocol ? { protocol } : {}), ...(config.apiVersion ? { apiVersion: config.apiVersion } : {}) }
+        : { baseUrl: config.baseUrl.trim(), apiKey: config.apiKey.trim(), ...(protocol ? { protocol } : {}), ...(config.apiVersion ? { apiVersion: config.apiVersion } : {}) };
       const value = await companyRequest<CompanyProviderModelsResponse>('/api/company/models/catalog', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ providerId: saved.id,
-          protocol: owner.cfg.apiProtocol === 'ollama' ? 'openai' : owner.cfg.apiProtocol, ...(owner.cfg.apiVersion ? { apiVersion: owner.cfg.apiVersion } : {}),
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal,
       });
-      return draft.current === owner ? value : null;
-    } catch (reason) { if (draft.current !== owner) return null; throw reason; }
+      return draft.current === owner && catalogSequence.current === sequence ? value : null;
+    } catch (reason) {
+      if (draft.current !== owner || catalogSequence.current !== sequence || controller.signal.aborted) return null;
+      throw reason;
+    } finally {
+      if (catalogAbort.current === controller) catalogAbort.current = null;
+    }
   }
   function choose(agentId: string, requestedModel?: string) {
     const config = draft.current.cfg;

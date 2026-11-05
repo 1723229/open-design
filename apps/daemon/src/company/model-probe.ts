@@ -5,6 +5,18 @@ import { readProviderResponse } from '../integrations/provider-response.js';
 
 interface ProviderConnection { baseUrl: string; apiKey: string; fetchImpl?: typeof fetch | undefined; timeoutMs?: number | undefined }
 export interface ProbeRequest extends ProviderConnection { agentId?: CompanyAgentId; model: string; protocol: CompanyModelProtocol; now?: (() => number) | undefined }
+export type CompanyModelCatalogErrorCode =
+  | 'catalog_auth_failed'
+  | 'catalog_network_error'
+  | 'catalog_unsupported'
+  | 'catalog_invalid_url'
+  | 'catalog_unavailable';
+export class CompanyModelCatalogError extends Error {
+  constructor(public readonly status: number, public readonly code: CompanyModelCatalogErrorCode, message: string) {
+    super(message);
+    this.name = 'CompanyModelCatalogError';
+  }
+}
 const MAX_BYTES = 1024 * 1024;
 const schema = { type: 'object', properties: {}, additionalProperties: false };
 interface ProtocolEvent {
@@ -96,13 +108,41 @@ export async function catalogModels(request: ProviderConnection & { protocol?: P
   try {
     const result = await listProviderModels({ protocol: request.protocol ?? 'openai', baseUrl: request.baseUrl, apiKey: request.apiKey,
       ...(request.apiVersion ? { apiVersion: request.apiVersion } : {}), signal: controller.signal, fetchImpl: request.fetchImpl, maxResponseBytes: MAX_BYTES });
-    if (!result.ok || !result.models) throw new Error();
+    if (result.kind === 'no_models') return { models: [], status: 'empty' };
+    if (!result.ok || !result.models) {
+      const unsupportedStatus = result.status === 404 || result.status === 405 || result.status === 501;
+      const code: CompanyModelCatalogErrorCode = result.kind === 'forbidden' && result.status === undefined
+        ? 'catalog_invalid_url'
+        : unsupportedStatus || result.kind === 'unsupported_protocol'
+        ? 'catalog_unsupported'
+        : result.kind === 'auth_failed' || result.kind === 'forbidden'
+          ? 'catalog_auth_failed'
+          : result.kind === 'invalid_base_url' && /blocked|internal|private/i.test(result.detail ?? '')
+            ? 'catalog_invalid_url'
+            : result.kind === 'timeout' || result.kind === 'upstream_unavailable' || result.kind === 'invalid_base_url'
+              ? 'catalog_network_error'
+              : 'catalog_unavailable';
+      const status = code === 'catalog_auth_failed' ? 502 : code === 'catalog_invalid_url' ? 403 : 502;
+      const message = code === 'catalog_auth_failed'
+        ? 'Provider model catalog rejected the API key.'
+        : code === 'catalog_network_error'
+          ? 'Could not reach the provider model catalog.'
+          : code === 'catalog_unsupported'
+            ? 'This provider does not expose a supported model catalog; enter the model ID manually.'
+            : code === 'catalog_invalid_url'
+              ? 'The provider URL is blocked by the server network policy.'
+              : 'Provider model catalog is unavailable; enter the model ID manually.';
+      throw new CompanyModelCatalogError(status, code, message);
+    }
     const models: string[] = [];
     for (const entry of result.models) {
       if (typeof entry?.id !== 'string' || /[\x00-\x1f\x7f]/.test(entry.id)) continue;
       const id = entry.id.trim(); if (id && id.length <= 512 && !models.includes(id)) models.push(id);
     }
-    return { models };
-  } catch { throw new Error('Provider model catalog is unavailable; enter model IDs manually.'); }
+    return { models, status: models.length ? 'ok' : 'empty' };
+  } catch (error) {
+    if (error instanceof CompanyModelCatalogError) throw error;
+    throw new CompanyModelCatalogError(502, 'catalog_unavailable', 'Provider model catalog is unavailable; enter model IDs manually.');
+  }
   finally { clearTimeout(timer); }
 }

@@ -34,9 +34,9 @@ function decode(row: unknown): CompanyJob | null {
 /** A lease represents an entire logical turn, including its follow-on physical runs. */
 export class CompanyJobQueue {
   constructor(private readonly db: QueueDatabase, private readonly limits = { global: 12, perUser: 3, perProject: 1 }) {
-    if (!Number.isSafeInteger(limits.global) || limits.global < 1 || limits.global > 12
+    if (!Number.isSafeInteger(limits.global) || limits.global < 1
       || !Number.isSafeInteger(limits.perUser) || limits.perUser < 1 || limits.perUser > limits.global || limits.perProject !== 1) {
-      throw new Error('Company job limits require global 1–12, perUser 1–global and perProject 1');
+      throw new Error('Company job limits require positive integer global/perUser values, perUser <= global and perProject 1');
     }
     db.exec(`
       CREATE TABLE IF NOT EXISTS company_jobs (

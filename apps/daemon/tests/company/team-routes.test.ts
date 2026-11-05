@@ -10,7 +10,7 @@ import { companyTestDatabase } from './database.js';
 
 const cleanups: Array<() => unknown> = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
-async function fixture() {
+async function fixture(integrationSkewSeconds?: number) {
   let time = Date.now();
   const database = companyTestDatabase();
   const dataRoot = mkdtempSync(path.join(tmpdir(), 'od-teams-'));
@@ -18,6 +18,7 @@ async function fixture() {
   const runtime = await initializeCompany({database, dataRoot, now: () => time,
     config: { enabled: true, publicOrigin: 'http://design.test', auth: { mode: 'ldap' }, teams: {enabled: true},
       integrations: [{id: 'source', authorizeUrl: 'http://source.test/authorize', secret: 'test-secret-at-least-32-bytes-long'}],
+      ...(integrationSkewSeconds === undefined ? {} : { integrationSkewSeconds }),
       presentation: {showAgentIdentity: false, hiddenSettingsSections: []} },
     ldap: { authenticate: async () => null, recheck: async () => true, lookup: async id => ({entryUUID: id, username: id}) },
   });
@@ -27,16 +28,43 @@ async function fixture() {
   const server = createServer(app); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   cleanups.push(() => new Promise<void>(resolve => { server.close(() => resolve()); server.closeAllConnections(); }));
   const base = `http://127.0.0.1:${(server.address() as {port: number}).port}`;
-  async function signed(endpoint: string, body?: unknown, nonce = randomBytes(16).toString('hex')) {
+  async function signed(endpoint: string, body?: unknown, nonce = randomBytes(16).toString('hex'), timestamp = time, secret = 'test-secret-at-least-32-bytes-long') {
     const method = body ? 'POST' : 'GET', serialized = body ? JSON.stringify(body) : '';
-    const ts = String(time);
-    const signature = createHmac('sha256', 'test-secret-at-least-32-bytes-long')
+    const ts = String(timestamp);
+    const signature = createHmac('sha256', secret)
       .update(`${method}\n${endpoint}\n${ts}\n${nonce}\n${createHash('sha256').update(serialized).digest('hex')}`).digest('hex');
     return fetch(base + endpoint, {method, headers: {'content-type': 'application/json', 'x-nexus-timestamp': ts, 'x-nexus-nonce': nonce, 'x-nexus-signature': signature}, ...(body ? {body: serialized} : {})});
   }
   const snapshot = {namespace: 'instance', externalId: 'business', expectedRevision: 0, complete: true, name: 'Business', status: 'active', members: [{entryUUID: 'alice', username: 'alice', role: 'viewer'}]};
-  return {runtime, base, signed, snapshot, advance: (ms: number) => {time += ms;}};
+  return {runtime, base, signed, snapshot, now: () => time, advance: (ms: number) => {time += ms;}};
 }
+
+it.each([-60_001, -60_000, 60_000, 60_001])('keeps the default signature boundary at %i ms', async offset => {
+  const f = await fixture();
+  expect((await f.signed('/api/company/integrations/source/teams', undefined, undefined, f.now() + offset)).status)
+    .toBe(Math.abs(offset) <= 60_000 ? 200 : 403);
+});
+
+it.each([-600_001, -600_000, -118_000, 118_000, 600_000, 600_001])('applies the configured signature boundary at %i ms', async offset => {
+  const f = await fixture(600);
+  expect((await f.signed('/api/company/integrations/source/teams', undefined, undefined, f.now() + offset)).status)
+    .toBe(Math.abs(offset) <= 600_000 ? 200 : 403);
+});
+
+it('retains future-dated nonces throughout their full signature validity and still rejects wrong secrets', async () => {
+  const f = await fixture(600), endpoint = '/api/company/integrations/source/teams';
+  const timestamp = f.now() + 600_000, nonce = randomBytes(16).toString('hex');
+  expect((await f.signed(endpoint, undefined, undefined, f.now(), 'wrong-secret')).status).toBe(403);
+  expect((await f.signed(endpoint, undefined, nonce, timestamp)).status).toBe(200);
+  f.advance(300_001);
+  expect((await f.signed(endpoint, undefined, nonce, timestamp)).status).toBe(403);
+  f.advance(899_999);
+  expect((await f.signed(endpoint, undefined, nonce, timestamp)).status).toBe(403);
+  // A new nonce at the same boundary proves the replay rejection was not expiry.
+  expect((await f.signed(endpoint, undefined, undefined, timestamp)).status).toBe(200);
+  f.advance(60_000);
+  expect((await f.signed(endpoint, undefined, nonce, f.now())).status).toBe(200);
+});
 
 it('authenticates signed snapshots independently of cookies and rejects replay', async () => {
   const f = await fixture(), endpoint = '/api/company/integrations/source/teams';
@@ -105,6 +133,28 @@ it('rejects expired authorization codes and cannot change a reserved local admin
   f.advance(60_001);
   const result = await fetch(`${f.base}/api/company/integrations/source/callback?${new URLSearchParams({state,code})}`, {redirect:'manual',headers:{cookie:start.headers.get('set-cookie')!.split(';')[0]!}});
   expect(result.status).toBe(403);
+});
+
+it('keeps browser login state and authorization code lifetimes unchanged with a 600-second signature window', async () => {
+  const f = await fixture(600), endpoint = '/api/company/integrations/source';
+  await f.signed(`${endpoint}/teams`, f.snapshot);
+  const teamId = f.runtime.store.teams.mappings('source')[0]!.teamId;
+  const start = () => fetch(`${f.base}${endpoint}/start?namespace=instance&externalId=business`, { redirect: 'manual' });
+  const stale = await start();
+  const staleState = new URL(stale.headers.get('location')!).searchParams.get('state')!;
+  f.advance(120_001);
+  expect((await f.signed(`${endpoint}/codes`, { state: staleState, teamId, entryUUID: 'alice' })).status).toBe(403);
+  const fresh = await start();
+  const state = new URL(fresh.headers.get('location')!).searchParams.get('state')!;
+  const issued = await f.signed(`${endpoint}/codes`, { state, teamId, entryUUID: 'alice' });
+  expect(issued.status).toBe(200);
+  const { code } = await issued.json() as { code: string };
+  f.advance(60_001);
+  const response = await fetch(`${f.base}${endpoint}/callback?${new URLSearchParams({ state, code })}`, {
+    redirect: 'manual', headers: { cookie: fresh.headers.get('set-cookie')!.split(';')[0]! },
+  });
+  expect(response.status).toBe(403);
+  expect(response.headers.get('set-cookie')).toBeNull();
 });
 
 it('returns inherited team ownership from duplicate responses and ignores a caller team override',async()=>{

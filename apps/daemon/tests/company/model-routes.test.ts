@@ -15,11 +15,17 @@ afterEach(async () => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 const draft = { expectedRevision: 0, name: 'Gateway', baseUrl: 'https://gateway.example', apiKey: 'PRIVATE_KEY', models: ['model-a'] };
-async function setup(options: { role?: 'admin' | 'member' | 'anonymous'; enabled?: boolean; available?: boolean; unsupported?: boolean; crash?: boolean } = {}) {
+async function setup(options: { role?: 'admin' | 'member' | 'anonymous'; enabled?: boolean; available?: boolean; unsupported?: boolean; crash?: boolean; network?: boolean; catalogStatus?: number; empty?: boolean } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'model-routes-')); roots.push(root);
-  const models = new CompanyModelSettings(root, { nativeProbe: async r => ({model:r.model,protocol:r.protocol,status:options.unsupported || options.crash ? 'error' : 'supported',checkedAt:Date.now(),...(r.agentId ? {testedBy:r.agentId} : {}),verification:'file-write'}), fetchImpl: async (url) => {
+  const upstream: Array<{ url: string; headers: Headers }> = [];
+  const models = new CompanyModelSettings(root, { nativeProbe: async r => ({model:r.model,protocol:r.protocol,status:options.unsupported || options.crash ? 'error' : 'supported',checkedAt:Date.now(),...(r.agentId ? {testedBy:r.agentId} : {}),verification:'file-write'}), fetchImpl: async (url, init) => {
+    upstream.push({ url: String(url), headers: new Headers(init?.headers) });
+    if (options.network) throw Object.assign(new Error('upstream network failure'), { cause: { code: 'ECONNREFUSED' } });
     if (options.crash) throw new Error('PRIVATE_KEY upstream crash');
-    if (String(url).endsWith('/models')) return Response.json({ data: [{ id: 'model-a' }, { id: 'model-b' }] });
+    if (String(url).endsWith('/models')) {
+      if (options.catalogStatus) return new Response('upstream failure', { status: options.catalogStatus });
+      return Response.json({ data: options.empty ? [] : [{ id: 'model-a' }, { id: 'model-b' }] });
+    }
     if (!String(url).endsWith('/responses') || options.unsupported) return new Response('PRIVATE_KEY', { status: 404 });
     return new Response('data: {"type":"response.output_item.done","item":{"type":"function_call","name":"nexus_probe","arguments":"{}"}}\n\ndata: {"type":"response.completed","response":{"status":"completed"}}\n\n', { headers: { 'content-type': 'text/event-stream' } });
   } });
@@ -35,7 +41,7 @@ async function setup(options: { role?: 'admin' | 'member' | 'anonymous'; enabled
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/company/models`;
   const request = (suffix = '', body?: unknown, method = 'POST') => fetch(`${base}${suffix}`, body === undefined ? {} : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const save = () => request('/providers', draft, 'PUT').then(r => r.json()) as Promise<CompanyModelSettingsResponse>;
-  return { request, save, models, audits };
+  return { request, save, models, audits, upstream };
 }
 
 test.each([{ role: 'member' as const, status: 403 }, { role: 'anonymous' as const, status: 401 }, { enabled: false, status: 404 }])('protects every model endpoint: %j', async options => {
@@ -86,13 +92,79 @@ test('rejects activation for missing executables after a successful API probe', 
 
 test('returns catalog candidates and safe validation/provider errors', async () => {
   const { save, request } = await setup(); const saved = await save();
-  expect(await request('/catalog', { providerId: saved.providers[0]!.id }).then(r => r.json())).toEqual({ models: ['model-a', 'model-b'] });
+  expect(await request('/catalog', { providerId: saved.providers[0]!.id }).then(r => r.json())).toEqual({ models: ['model-a', 'model-b'], status: 'ok' });
   const missing = await request('/catalog', { providerId: 'missing' }); expect(missing.status).toBe(404);
   expect(await missing.json()).toMatchObject({ code: 'provider_not_found' });
   expect((await request('/test', null)).status).toBe(400);
   const failing = await setup({ crash: true }); const draftSaved = await failing.save();
   const error = await failing.request('/catalog', { providerId: draftSaved.providers[0]!.id });
   expect(error.status).toBe(502); expect(await error.text()).not.toContain('PRIVATE_KEY');
+});
+
+test('catalogs an unsaved provider without creating a provider or requiring a model', async () => {
+  const { request, models } = await setup();
+  const response = await request('/catalog', {
+    baseUrl: 'https://gateway.example',
+    apiKey: 'PRIVATE_KEY',
+    protocol: 'openai',
+  });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ models: ['model-a', 'model-b'], status: 'ok' });
+  expect(models.view()).toMatchObject({ revision: 0, providers: [], active: null });
+});
+
+test('catalogs a saved provider with a blank browser key by reusing the server key', async () => {
+  const { request, save, upstream, models } = await setup();
+  const saved = await save();
+  const response = await request('/catalog', { providerId: saved.providers[0]!.id, protocol: 'openai', apiKey: '' });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ models: ['model-a', 'model-b'], status: 'ok' });
+  expect(upstream.at(-1)?.headers.get('authorization')).toBe('Bearer PRIVATE_KEY');
+  expect(models.view()).toMatchObject({ revision: saved.revision, active: null });
+  expect(JSON.stringify(models.view())).not.toContain('PRIVATE_KEY');
+});
+
+test.each([
+  [401, 'catalog_auth_failed'],
+  [403, 'catalog_auth_failed'],
+  [404, 'catalog_unsupported'],
+  [405, 'catalog_unsupported'],
+  [501, 'catalog_unsupported'],
+])('classifies provider catalog HTTP %s as %s', async (status, code) => {
+  const { request } = await setup({ catalogStatus: status });
+  const response = await request('/catalog', { baseUrl: 'https://gateway.example', apiKey: 'PRIVATE_KEY', protocol: 'openai' });
+  expect(response.status).toBe(502);
+  expect(await response.json()).toMatchObject({ code });
+});
+
+test('discovers an edited saved URL with its server key without persisting the URL', async () => {
+  const { request, save, upstream, models } = await setup(); const saved = await save();
+  const response = await request('/catalog', { providerId: saved.providers[0]!.id, baseUrl: 'https://edited.example/v1', apiKey: '', protocol: 'openai' });
+  expect(response.status).toBe(200);
+  expect(upstream.at(-1)?.url).toBe('https://edited.example/v1/models');
+  expect(upstream.at(-1)?.headers.get('authorization')).toBe('Bearer PRIVATE_KEY');
+  expect(models.view()).toMatchObject({ revision: saved.revision, providers: saved.providers, active: saved.active });
+});
+
+test('classifies a provider catalog with no models as an explicit empty result', async () => {
+  const { request } = await setup({ empty: true });
+  const response = await request('/catalog', { baseUrl: 'https://gateway.example', apiKey: 'PRIVATE_KEY', protocol: 'openai' });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ models: [], status: 'empty' });
+});
+
+test('rejects incomplete unsaved catalog parameters without contacting a provider', async () => {
+  const { request } = await setup();
+  const response = await request('/catalog', { baseUrl: 'https://gateway.example', protocol: 'openai' });
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ code: 'catalog_parameters_incomplete' });
+});
+
+test('classifies provider network failures separately from authentication and unsupported catalogs', async () => {
+  const { request } = await setup({ network: true });
+  const response = await request('/catalog', { baseUrl: 'https://gateway.example', apiKey: 'PRIVATE_KEY', protocol: 'openai' });
+  expect(response.status).toBe(502);
+  expect(await response.json()).toMatchObject({ code: 'catalog_network_error' });
 });
 
 test('deletes unused provider with revision checks and audits its ID', async () => {

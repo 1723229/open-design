@@ -10,13 +10,20 @@ Create a private `.env.company` for Compose with `NEXUS_DATA_ROOT` (the explicit
 absolute runtime data root), `NEXUS_VERSION`, random `NEXUS_EXECUTOR_SECRET` and
 `NEXUS_PROXY_SECRET`, `NEXUS_DOCKER_GID`, and `NEXUS_LDAP_BIND_PASSWORD`.
 Keep the file mode `0600`; never commit it. Set `NEXUS_MAX_JOBS` for the global
-limit (default 12, integer 1–12) and `NEXUS_MAX_JOBS_PER_USER` for each user's limit
-(default 3, integer 1–global). Compose passes these as `OD_COMPANY_MAX_JOBS` and
+limit (default 12, positive safe integer) and `NEXUS_MAX_JOBS_PER_USER` for each user's limit
+(default 3, positive safe integer up to the global limit). Compose passes these as `OD_COMPANY_MAX_JOBS` and
 `OD_COMPANY_MAX_JOBS_PER_USER` respectively; direct daemon starts use those same
 defaults. Invalid quotas reject startup. Each project always holds at most one
 logical task, including its follow-on physical runs. Tasks above a user's quota
 remain queued while other eligible users can use the remaining global slots.
 If the global limit is configured below 3, configure the per-user limit as well.
+
+`OD_COMPANY_INTEGRATION_SKEW_SECONDS` controls the server-to-server signed request
+window (default 60 seconds, integers from 60 to 600 only); invalid values reject
+API startup. Set it in the private Compose env file when servers have known clock
+skew. Only the API consumes it. Nonces remain reserved for twice that window plus
+60 seconds (1260 seconds with a 600-second window). Browser login state and
+one-time authorization-code lifetimes are unchanged.
 
 Adapt `company.example.yaml` to the deployment and install it as the backend
 `company.yaml` configuration. Match `server.public_origin` to the actual browser
